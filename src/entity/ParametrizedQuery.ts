@@ -1,10 +1,13 @@
 import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
 
 @Entity()
-export class OriginalRequest {
+export class ParametrizedQuery {
   @PrimaryGeneratedColumn()
   id: number;
 
   @Column('text')
-  requestText: string;
+  parsedQueryText: string;
+
+  @Column('varchar', { length: 40 })
+  userHost: string;
 }

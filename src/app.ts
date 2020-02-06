@@ -1,6 +1,5 @@
 import express from 'express';
 import * as bodyParser from 'body-parser'; // can use only for set configuration, otherwise remove this dependency
-import * as dotenv from 'dotenv';
 import cors from 'cors';
 import helmet from 'helmet';
 import 'reflect-metadata';
