@@ -1,5 +1,5 @@
 import {Entity, PrimaryGeneratedColumn, OneToOne, JoinColumn, Column} from 'typeorm';
-import {FilteredOriginalQuery} from "./FilteredOriginalQuery";
+import {SuitableOriginalQueries} from "./SuitableOriginalQueries";
 
 @Entity()
 export class ProfileReplayInfo {
@@ -9,7 +9,7 @@ export class ProfileReplayInfo {
   @Column('text')
   profileResult: string;
 
-  @OneToOne(type => FilteredOriginalQuery)
+  @OneToOne(type => SuitableOriginalQueries)
   @JoinColumn({name: 'queryId' })
   queryId: number;
 }

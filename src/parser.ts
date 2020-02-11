@@ -5,18 +5,13 @@ const parser = new Parser();
 
 // console.log(ast.columns[0].expr);
 
-export const getSelectQueries = (query: string) => {
-  const sqlValues = parser.astify(query)[0].values;
-  const selectQueryObjects = sqlValues.map(val =>
-    val.value.find(v => ('' + v.value).startsWith('select'))
-  );
-  const selectQueries = selectQueryObjects.reduce((result = [], selectQuery) => {
-    if (selectQuery) {
-      result.push(selectQuery.value);
-    }
-    return result;
-  }, []);
-  return selectQueries;
+export const createInsertQuery = (tableName: string, database: string, originalQuery: string) => {
+  const parsedQuery = parser.astify(originalQuery);
+  console.log(parsedQuery[0].table)
+  parsedQuery[0].table[0].table = tableName;
+  parsedQuery[0].table[0].db = database;
+
+  return parser.sqlify(parsedQuery);
 };
 
 export const getTableList = (selectQuery: string) => {

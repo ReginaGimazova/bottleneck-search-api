@@ -1,18 +1,18 @@
 import {Entity, PrimaryGeneratedColumn, OneToOne, JoinColumn, Column} from 'typeorm';
-import {FilteredOriginalQuery} from "./FilteredOriginalQuery";
+import {SuitableOriginalQueries} from "./SuitableOriginalQueries";
 
 @Entity()
 export class ExplainReplayInfo {
   @PrimaryGeneratedColumn()
   id: number;
 
-  /*@ManyToOne(type => FilteredOriginalQuery, (originalQuery: FilteredOriginalQuery) => originalQuery.id)
+  /*@ManyToOne(type => SuitableOriginalQueries, (originalQuery: SuitableOriginalQueries) => originalQuery.id)
   queryId: number;*/
 
   @Column('text')
   explainResult: string;
 
-  @OneToOne(type => FilteredOriginalQuery)
+  @OneToOne(type => SuitableOriginalQueries)
   @JoinColumn({name: 'queryId' })
   queryId: number;
 }

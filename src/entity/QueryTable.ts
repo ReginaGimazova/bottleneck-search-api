@@ -1,11 +1,11 @@
 import {Entity, PrimaryGeneratedColumn, OneToOne, JoinColumn, Column} from 'typeorm';
-import {FilteredOriginalQuery} from "./FilteredOriginalQuery";
+import {SuitableOriginalQueries} from "./SuitableOriginalQueries";
 import {TablesStatistic} from "./TablesStatistic ";
 
 @Entity()
 export class QueryTable {
 
-  @OneToOne(type => FilteredOriginalQuery, {primary: true})
+  @OneToOne(type => SuitableOriginalQueries, {primary: true})
   @JoinColumn({name: 'queryId' })
   queryId: number;
 

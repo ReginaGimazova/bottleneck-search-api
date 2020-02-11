@@ -1,7 +1,7 @@
 import {Entity, PrimaryGeneratedColumn, Column} from 'typeorm';
 
 @Entity()
-export class UnfilteredOriginalQuery {
+export class RejectedOriginalQueries {
   @PrimaryGeneratedColumn()
   id: number;
 

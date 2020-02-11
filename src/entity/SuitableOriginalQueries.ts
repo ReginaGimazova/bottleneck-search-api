@@ -2,7 +2,7 @@ import {Entity, PrimaryGeneratedColumn, Column, OneToOne, JoinColumn} from 'type
 import {ParametrizedQuery} from "./ParametrizedQuery";
 
 @Entity()
-export class FilteredOriginalQuery {
+export class SuitableOriginalQueries {
   @PrimaryGeneratedColumn()
   id: number;
 
