@@ -6,3 +6,5 @@ app.listen(PORT);
 
 const dataStore = new DataStore();
 dataStore.save();
+
+dataStore.getSuitableQueries();

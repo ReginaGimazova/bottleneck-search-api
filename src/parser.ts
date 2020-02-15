@@ -1,3 +1,5 @@
+import originalQueries from "./tableMappers/originalQueries";
+
 const { Parser } = require('node-sql-parser');
 const parser = new Parser();
 
@@ -7,9 +9,9 @@ const parser = new Parser();
 
 export const createInsertQuery = (tableName: string, database: string, originalQuery: string) => {
   const parsedQuery = parser.astify(originalQuery);
-  console.log(parsedQuery[0].table)
   parsedQuery[0].table[0].table = tableName;
   parsedQuery[0].table[0].db = database;
+  parsedQuery[0].columns = originalQueries.columns;
 
   return parser.sqlify(parsedQuery);
 };

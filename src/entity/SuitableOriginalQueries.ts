@@ -6,6 +6,9 @@ export class SuitableOriginalQueries {
   @PrimaryGeneratedColumn()
   id: number;
 
+  @Column('varchar', {length: 40})
+  userHost: string;
+
   @Column('text')
   queryText: string;
 
