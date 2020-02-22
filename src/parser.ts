@@ -1,6 +1,6 @@
 import originalQueries from "./tableMappers/originalQueries";
+import {Parser} from "node-sql-parser";
 
-const { Parser } = require('node-sql-parser');
 const parser = new Parser();
 
 // ast.where.right.value = 'XXX';

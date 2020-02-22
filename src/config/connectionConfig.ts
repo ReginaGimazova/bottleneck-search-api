@@ -2,6 +2,6 @@ export default {
   multipleStatements: true,
   host: "localhost",
   user: "root",
-  password: "34Zc18WfLn",
+  password: "password",
   database: "test"
 }

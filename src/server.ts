@@ -1,10 +1,16 @@
 import app from './app';
-import { DataStore } from "./DataStore";
+import SuitableQueryDataStore from "./dataStores/SuitableQueryDataStore";
+import RejectedQueryDataStore from './dataStores/RejectedQueryDataStore';
+import OriginalQueryDataStore from './dataStores/OriginalQueryDataStore';
+
 const PORT = process.env.PORT || 5000;
 
 app.listen(PORT);
 
-const dataStore = new DataStore();
-dataStore.save();
+const suitableQueryDataStore = new SuitableQueryDataStore();
+const rejectedOriginalQueries = new RejectedQueryDataStore();
+const originalQueryDataStore = new OriginalQueryDataStore();
 
-dataStore.getSuitableQueries();
+// originalQueryDataStore.save();
+// suitableQueryDataStore.save();
+// rejectedOriginalQueries.save();
