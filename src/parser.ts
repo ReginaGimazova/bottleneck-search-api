@@ -21,7 +21,7 @@ export const getTableList = (selectQuery: string) => {
     database: 'MySQL',
   };
 
-  let tableList;
+  let tableList = [];
 
   try {
     tableList = parser.tableList(selectQuery, opt);
