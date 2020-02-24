@@ -1,5 +1,6 @@
 import originalQueries from "./tableMappers/originalQueries";
 import {Parser} from "node-sql-parser";
+import {parse, stringify} from 'js-sql-parser';
 
 const parser = new Parser();
 
@@ -28,5 +29,35 @@ export const getTableList = (selectQuery: string) => {
     return tableList;
   } catch (e) {
     console.log(e);
+  }
+};
+
+export const parametrizeQuery = (originalQuery: string) => {
+
+  const recursiveVisitorOfQuery = (query) => {
+    const constTypes = ['String', 'Number', 'Boolean'];
+    const leftRightNodes = ['AndExpression', 'ComparisonBooleanPrimary'];
+    if (constTypes.includes(query.type)){
+      query.value = 'X';
+    }
+    else if (leftRightNodes.includes(query.type)) {
+      recursiveVisitorOfQuery(query.left);
+      recursiveVisitorOfQuery(query.right);
+    }
+    else if (query.type === 'Select'){
+      recursiveVisitorOfQuery(query.where);
+    }
+    return query;
+  };
+
+  try {
+    const parsedQuery = parse(originalQuery);
+    const {value} = parsedQuery;
+
+    parsedQuery.value = recursiveVisitorOfQuery(value);
+    return stringify(parsedQuery);
+  }
+  catch (e) {
+    console.log(e.message)
   }
 };

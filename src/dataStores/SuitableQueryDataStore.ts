@@ -1,6 +1,7 @@
 import { createConnection, MysqlError} from 'mysql';
 import connectionConfig from '../config/connectionConfig';
-import {getTableList} from "../parser";
+import TablesStatisticDataStore from "./TablesStatisticDataStore";
+import ParametrizedQueriesDataStore from "./ParametrizedQueriesDataStore";
 
 class SuitableQueryDataStore {
   async save() : Promise<any> {
@@ -25,33 +26,21 @@ class SuitableQueryDataStore {
           }
         }
     );
-    const tableList = [];
+    const queries = [];
+    const tablesStatisticDataStore = new TablesStatisticDataStore();
+    const parametrizedQueriesDataStore = new ParametrizedQueriesDataStore();
 
-    await connection.query(
-      'select query_text from suitable_original_queries;', (error: MysqlError, result: any) => {
-         if (result){
-           Object.keys(result).forEach(key => {
-             const tables = getTableList(result[key].query_text);
-             tableList.concat(tables);
-           })
-         }
-         if (error) {
-           // rollback
-         }
-      }
-    );
+    await connection
+      .query('select (id, query_text) from suitable_original_queries;', async (err, result) => {
+        Object.keys(result).forEach(key => {
+          queries.push(result[key]);
+        });
 
-    tableList.forEach(table => {
-      connection.query(
-        `insert into test.tables_statistic (table_name, table_name_hash, call_count) values (${table}, sha(${table}), 1) ` +
-        `on duplicate key update call_count = call_count + 1;`
-      , (tablesError: MysqlError) => {
-          console.log(tablesError)
-        })
-    });
+        await tablesStatisticDataStore.save(connection, queries);
+        await parametrizedQueriesDataStore.save(connection, queries);
+      });
 
     await connection.commit();
-
     await connection.end();
   };
 
