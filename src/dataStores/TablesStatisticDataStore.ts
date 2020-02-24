@@ -29,7 +29,7 @@ class TablesStatisticDataStore {
 
   getAll(callback) {
     const connection = createConnection({...connectionConfig});
-    connection.query('select id, table_name, call_count from test.tables_statistic;', (error, result) => {
+    connection.query('select id, table_name, call_count from test.tables_statistic order by call_count desc;', (error, result) => {
       if (error){
         console.log('get table statistic error', error);
         callback(undefined, error)
