@@ -4,14 +4,14 @@ import TablesStatisticDataStore from "./TablesStatisticDataStore";
 import ParametrizedQueriesDataStore from "./ParametrizedQueriesDataStore";
 
 class SuitableQueryDataStore {
-  async save() : Promise<any> {
+  save() {
     const connection = createConnection({
       ...connectionConfig,
     });
 
-    await connection.beginTransaction();
+    connection.beginTransaction();
 
-    await connection.query(
+    connection.query(
       'insert into suitable_original_queries (query_text, user_host) select argument, user_host from original_queries where argument like "select%";',
         (error: MysqlError) => {
           if (error) {
@@ -30,18 +30,21 @@ class SuitableQueryDataStore {
     const tablesStatisticDataStore = new TablesStatisticDataStore();
     const parametrizedQueriesDataStore = new ParametrizedQueriesDataStore();
 
-    await connection
-      .query('select (id, query_text) from suitable_original_queries;', async (err, result) => {
-        Object.keys(result).forEach(key => {
-          queries.push(result[key]);
-        });
+    connection
+      .query('select id, query_text from suitable_original_queries;', (err, result) => {
+        if (result) {
 
-        await tablesStatisticDataStore.save(connection, queries);
-        await parametrizedQueriesDataStore.save(connection, queries);
+          Object.keys(result).forEach(key => {
+            queries.push(result[key]);
+          });
+
+          tablesStatisticDataStore.save(connection, queries);
+          parametrizedQueriesDataStore.save(connection, queries);
+        }
       });
 
-    await connection.commit();
-    await connection.end();
+    connection.commit();
+    //connection.end();
   };
 
   async getAll(callback) : Promise<any>{

@@ -28,7 +28,8 @@ export const getTableList = (selectQuery: string) => {
     tableList = parser.tableList(selectQuery, opt);
     return tableList;
   } catch (e) {
-    console.log(e);
+    return [];
+    // console.log(e);
   }
 };
 
