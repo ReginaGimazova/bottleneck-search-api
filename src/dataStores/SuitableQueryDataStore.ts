@@ -54,7 +54,7 @@ class SuitableQueryDataStore {
       ...connectionConfig
     });
 
-    await connection.query('select id, query_text from suitable_original_queries', (err: MysqlError, result: any) => {
+    await connection.query('select id, query_text from suitable_original_queries;', (err: MysqlError, result: any) => {
       if (result){
         Object.keys(result).forEach(key => {
           queries.push(JSON.stringify(result[key]));

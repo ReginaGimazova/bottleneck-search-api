@@ -1,12 +1,7 @@
 import originalQueries from "./tableMappers/originalQueries";
 import {Parser} from "node-sql-parser";
-import {parse, stringify} from 'js-sql-parser';
 
 const parser = new Parser();
-
-// ast.where.right.value = 'XXX';
-
-// console.log(ast.columns[0].expr);
 
 export const createInsertQuery = (tableName: string, database: string, originalQuery: string) => {
   const parsedQuery = parser.astify(originalQuery);
@@ -33,32 +28,38 @@ export const getTableList = (selectQuery: string) => {
   }
 };
 
-export const parametrizeQuery = (originalQuery: string) => {
+export const parametrizeQuery = (originalQuery) => {
 
-  const recursiveVisitorOfQuery = (query) => {
-    const constTypes = ['String', 'Number', 'Boolean'];
-    const leftRightNodes = ['AndExpression', 'ComparisonBooleanPrimary'];
-    if (constTypes.includes(query.type)){
-      query.value = 'X';
+  const recursiveVisitorOfQuery = (astObject) => {
+    const constTypes = ['string', 'number', 'boolean'];
+    const leftRightNodes = ['binary_expr'];
+    if (astObject) {
+
+      if (constTypes.includes(astObject.type)) {
+        astObject.type = 'number';
+        astObject.value = 123456789;
+
+      } else if (leftRightNodes.includes(astObject.type)) {
+        recursiveVisitorOfQuery(astObject.left);
+        recursiveVisitorOfQuery(astObject.right);
+      } else if (astObject.type === 'select') {
+        [].concat(astObject.columns).forEach(column => {
+          recursiveVisitorOfQuery(column.expr);
+        });
+        recursiveVisitorOfQuery(astObject.where)
+      }
     }
-    else if (leftRightNodes.includes(query.type)) {
-      recursiveVisitorOfQuery(query.left);
-      recursiveVisitorOfQuery(query.right);
-    }
-    else if (query.type === 'Select'){
-      recursiveVisitorOfQuery(query.where);
-    }
-    return query;
+    return astObject;
   };
 
   try {
-    const parsedQuery = parse(originalQuery);
-    const {value} = parsedQuery;
+    let astObject = parser.astify(originalQuery);
 
-    parsedQuery.value = recursiveVisitorOfQuery(value);
-    return stringify(parsedQuery);
+    astObject = recursiveVisitorOfQuery(astObject);
+
+    return parser.sqlify(astObject);
   }
   catch (e) {
-    console.log(e.message)
+    //console.log(e.message)
   }
 };

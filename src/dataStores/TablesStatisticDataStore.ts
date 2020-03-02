@@ -20,24 +20,25 @@ class TablesStatisticDataStore {
         .map(value => `('${value}', 1)`)
         .join(', ');
 
-      connection.query(
-        `insert into test.tables_statistic (table_name, call_count) values ${commaSeparatedTableNames} on duplicate key update call_count = call_count + 1;`,
-         (tablesError: MysqlError, result) => {
-          console.log(tablesError, 'err');
-      })
+    connection.query(
+      `insert into test.tables_statistic (table_name, call_count) values ${commaSeparatedTableNames} on duplicate key update call_count = call_count + 1;`,
+       (tablesError: MysqlError) => { console.log(tablesError, 'err');}
+     )
   };
 
   getAll(callback) {
     const connection = createConnection({...connectionConfig});
-    connection.query('select id, table_name, call_count from test.tables_statistic order by call_count desc;', (error, result) => {
+    connection.query('select id, table_name, call_count from test.tables_statistic order by call_count asc;', (error, result) => {
       if (error){
         console.log('get table statistic error', error);
-        callback(undefined, error)
+        callback(undefined, error);
+        connection.end();
       }
       else if (result) {
-        callback(result, undefined)
+        callback(result, undefined);
+        connection.end();
       }
-    })
+    });
   }
 }
 

@@ -3,8 +3,8 @@ import {getAll} from "../controllers/tableStatisticController";
 
 const tableStatistic = app => {
     // retrieve all tables statistic
-    app.route('/tables').get(async (req: Request, res: Response) => {
-        await getAll(req, res);
+    app.route('/tables').get((req: Request, res: Response) => {
+        getAll(req, res);
     })
 };
 
