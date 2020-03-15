@@ -11,8 +11,29 @@ class SuitableQueryDataStore {
 
     connection.beginTransaction();
 
-    connection.query(
-      'insert into suitable_original_queries (query_text, user_host) select argument, user_host from original_queries where argument like "select%";',
+    connection.query('select filter_query, type from filter', (error, result) => {
+      result.forEach(({filter_query, type}) => {
+        connection.query(
+          ` select argument, user_host from original_queries 
+            where  argument != '${filter_query}' or argument not like '${filter_query}';`,
+            (insetError: MysqlError, res) => {
+              console.log(insetError, res)
+              if (insetError) {
+                connection.rollback((rollbackError: MysqlError) => {
+                  if (rollbackError) {
+                    return rollbackError.message;
+                  }
+                  else {
+                    return insetError.message
+                  }
+                });
+              }
+            }
+        );
+      })
+    });
+    /*connection.query(
+      'insert into suitable_original_queries (query_text, user_host) select argument from original_queries where argument != ;',
         (error: MysqlError) => {
           if (error) {
             connection.rollback((rollbackError: MysqlError) => {
@@ -25,7 +46,7 @@ class SuitableQueryDataStore {
             });
           }
         }
-    );
+    );*/
     const queries = [];
     const tablesStatisticDataStore = new TablesStatisticDataStore();
     const parametrizedQueriesDataStore = new ParametrizedQueriesDataStore();
@@ -38,8 +59,8 @@ class SuitableQueryDataStore {
             queries.push(result[key]);
           });
 
-          tablesStatisticDataStore.save(connection, queries);
-          parametrizedQueriesDataStore.save(connection, queries);
+        //  tablesStatisticDataStore.save(connection, queries);
+        //  parametrizedQueriesDataStore.save(connection, queries);
         }
       });
 
@@ -47,14 +68,14 @@ class SuitableQueryDataStore {
     //connection.end();
   };
 
-  async getAll(callback) : Promise<any>{
+  getAll(callback){
      const queries = [];
 
     const connection = createConnection({
       ...connectionConfig
     });
 
-    await connection.query('select id, query_text from suitable_original_queries;', (err: MysqlError, result: any) => {
+    connection.query('select id, query_text from suitable_original_queries;', (err: MysqlError, result: any) => {
       if (result){
         Object.keys(result).forEach(key => {
           queries.push(JSON.stringify(result[key]));
@@ -65,7 +86,7 @@ class SuitableQueryDataStore {
         callback(undefined, err)
       }
     });
-    await connection.end();
+    connection.end();
   }
 }
 

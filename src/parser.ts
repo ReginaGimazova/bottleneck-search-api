@@ -36,8 +36,8 @@ export const parametrizeQuery = (originalQuery) => {
     if (astObject) {
 
       if (constTypes.includes(astObject.type)) {
-        astObject.type = 'number';
-        astObject.value = 123456789;
+        astObject.type = 'string';
+        astObject.value = 'X';
 
       } else if (leftRightNodes.includes(astObject.type)) {
         recursiveVisitorOfQuery(astObject.left);

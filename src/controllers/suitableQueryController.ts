@@ -1,9 +1,9 @@
 import SuitableQueryDataStore from "../dataStores/SuitableQueryDataStore";
 
-export const getAll = async (req, res) => {
+export const getAll = (req, res) => {
   const suitableQueryDataStore = new SuitableQueryDataStore();
 
-  await suitableQueryDataStore.getAll((data, err) => {
+  suitableQueryDataStore.getAll((data, err) => {
     if (err)
        res.status(500).send({
          message: err.message || "Server error occurred while retrieving suitable queries."
@@ -12,7 +12,7 @@ export const getAll = async (req, res) => {
   });
 };
 
-export const save = async () => {
+export const save = () => {
   const suitableQueryDataStore = new SuitableQueryDataStore();
-  await suitableQueryDataStore.save();
+  suitableQueryDataStore.save();
 };
