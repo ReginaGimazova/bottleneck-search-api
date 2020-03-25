@@ -1,10 +1,10 @@
 {
    "type": "mysql",
-   "host": "localhost",
+   "host": "bottleneck-search-db.cabco5nswhst.us-east-1.rds.amazonaws.com",
    "port": 3306,
-   "username": "root",
-   "password": "34Zc18WfLn",
-   "database": "test",
+   "username": "admin",
+   "password": "admin-amazon",
+   "database": "master",
    "synchronize": true,
    "logging": false,
    "entities": [

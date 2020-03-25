@@ -9,63 +9,19 @@ class SuitableQueryDataStore {
       ...connectionConfig,
     });
 
-    connection.beginTransaction();
-
-    connection.query('select filter_query, type from filter', (error, result) => {
-      result.forEach(({filter_query, type}) => {
-        connection.query(
-          ` select argument, user_host from original_queries 
-            where  argument != '${filter_query}' or argument not like '${filter_query}';`,
-            (insetError: MysqlError, res) => {
-              console.log(insetError, res)
-              if (insetError) {
-                connection.rollback((rollbackError: MysqlError) => {
-                  if (rollbackError) {
-                    return rollbackError.message;
-                  }
-                  else {
-                    return insetError.message
-                  }
-                });
-              }
-            }
-        );
-      })
-    });
-    /*connection.query(
-      'insert into suitable_original_queries (query_text, user_host) select argument from original_queries where argument != ;',
-        (error: MysqlError) => {
-          if (error) {
-            connection.rollback((rollbackError: MysqlError) => {
-              if (rollbackError) {
-                return rollbackError.message;
-              }
-              else {
-                return error.message
-              }
-            });
-          }
-        }
-    );*/
-    const queries = [];
     const tablesStatisticDataStore = new TablesStatisticDataStore();
     const parametrizedQueriesDataStore = new ParametrizedQueriesDataStore();
 
-    connection
-      .query('select id, query_text from suitable_original_queries;', (err, result) => {
-        if (result) {
+    connection.query('insert into master.suitable_original_queries (user_host, query_text) select user_host, argument from original_queries ' +
+       'cross join filter where argument != filter_query and argument not like filter_query;', (error: MysqlError, result) => {
 
-          Object.keys(result).forEach(key => {
-            queries.push(result[key]);
-          });
+   });
 
-        //  tablesStatisticDataStore.save(connection, queries);
-        //  parametrizedQueriesDataStore.save(connection, queries);
-        }
-      });
+    connection.end();
 
-    connection.commit();
-    //connection.end();
+    tablesStatisticDataStore.save();
+    //  parametrizedQueriesDataStore.save(connection);
+
   };
 
   getAll(callback){

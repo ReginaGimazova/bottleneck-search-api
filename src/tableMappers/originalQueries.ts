@@ -1,5 +1,5 @@
 export default {
-  database: 'test',
+  database: 'master',
   table_name: 'original_queries',
   columns: [
     'event_time',

@@ -57,9 +57,9 @@ export const parametrizeQuery = (originalQuery) => {
 
     astObject = recursiveVisitorOfQuery(astObject);
 
-    return parser.sqlify(astObject);
+    return {query: parser.sqlify(astObject), error: ''};
   }
   catch (e) {
-    //console.log(e.message)
+    return {query: '', error: e.message};
   }
 };

@@ -1,7 +1,7 @@
 export default {
   multipleStatements: true,
-  host: "localhost",
-  user: "root",
-  password: "password",
-  database: "test"
+  host: "bottleneck-search-db.cabco5nswhst.us-east-1.rds.amazonaws.com",
+  user: "admin",
+  password: "admin-amazon",
+  database: "master"
 }

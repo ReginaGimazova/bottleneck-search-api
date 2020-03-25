@@ -2,17 +2,19 @@ import { createConnection } from 'mysql';
 import connectionConfig from '../config/connectionConfig';
 
 class RejectedQueryDataStore {
-  save () {
+  save(errorText = '', rejectedQuery = '', type = '') {
     const connection = createConnection({
-      ...connectionConfig
+      ...connectionConfig,
     });
 
-    connection.query (
-      'insert into rejected_original_queries (query_text) select argument from original_queries where argument not like "select%"',
-       (error) => {
-          console.log('get rejected query', error);
-       }
-    )
+    connection.query(
+      `insert into master.rejected_original_queries (error_text, query_text, type) values ('${errorText}', '${rejectedQuery}', '${type}')`,
+      (error, result) => {
+        console.log(error);
+      }
+    );
+
+    connection.end()
   }
 }
 
