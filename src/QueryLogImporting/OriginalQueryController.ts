@@ -1,4 +1,4 @@
-import OriginalQueryDataStore from "../dataStores/OriginalQueryDataStore";
+import OriginalQueryDataStore from "./OriginalQueryDataStore";
 
 export const save = () => {
     const originalQueryDataStore = new OriginalQueryDataStore();

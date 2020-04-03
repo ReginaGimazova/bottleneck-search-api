@@ -1,6 +1,6 @@
 import app from './app';
-import {save} from "./controllers/suitableQueryController";
-import {save as originalSave} from './controllers/originalQueryController';
+import {save} from "./QueriesFiltering/SuitableQueryController";
+import {save as originalSave} from './QueryLogImporting/OriginalQueryController';
 
 const PORT = process.env.PORT || 5000;
 

@@ -1,7 +1,7 @@
 import { createConnection, MysqlError} from 'mysql';
-import connectionConfig from '../config/connectionConfig';
-import TablesStatisticDataStore from "./TablesStatisticDataStore";
-import ParametrizedQueriesDataStore from "./ParametrizedQueriesDataStore";
+import TablesStatisticDataStore from "../TablesStatisticReceiving/TablesStatisticDataStore";
+import ParametrizedQueriesDataStore from "../OriginalQueriesParametrizing/ParametrizedQueriesDataStore";
+import connectionConfig from "../config/connectionConfig";
 
 class SuitableQueryDataStore {
   save() {
@@ -14,12 +14,13 @@ class SuitableQueryDataStore {
 
     connection.query('insert into master.suitable_original_queries (user_host, query_text) select user_host, argument from original_queries ' +
        'cross join filter where argument != filter_query and argument not like filter_query;', (error: MysqlError, result) => {
-
+      if (result){
+        tablesStatisticDataStore.save();
+      }
    });
 
     connection.end();
 
-    tablesStatisticDataStore.save();
     //  parametrizedQueriesDataStore.save(connection);
 
   };

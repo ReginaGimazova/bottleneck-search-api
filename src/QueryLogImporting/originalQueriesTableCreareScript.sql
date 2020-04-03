@@ -8,4 +8,3 @@ create table master.original_queries
     command_type varchar(10),
     argument text not null
 );
-

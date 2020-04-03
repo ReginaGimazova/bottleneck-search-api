@@ -1,9 +1,8 @@
 import { createConnection } from 'mysql';
 import * as fs from 'fs';
-import originalQueries from '../tableMappers/originalQueries';
-import connectionConfig from '../config/connectionConfig';
-
-import { createInsertQuery } from '../parser';
+import originalQueries from './originalQueries';
+import DBNameReplacer from "./DBNameReplacer";
+import connectionConfig from "../config/connectionConfig";
 
 const sql = fs.readFileSync('/home/regina/Документы/test.sql').toString();
 
@@ -13,7 +12,7 @@ class OriginalQueryDataStore {
       ...connectionConfig,
     });
 
-    const queryToSave = createInsertQuery(
+    const queryToSave = DBNameReplacer(
       originalQueries.table_name,
       originalQueries.database,
       sql

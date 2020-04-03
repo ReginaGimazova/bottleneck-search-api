@@ -1,8 +1,8 @@
 import { MysqlError, createConnection } from 'mysql';
-import { getTableList } from '../parser';
-import connectionConfig from '../config/connectionConfig';
 import rejectSourceTypes from '../config/constants';
-import RejectedQueryDataStore from './RejectedQueryDataStore';
+import connectionConfig from "../config/connectionConfig";
+import RejectedQueryDataStore from '../RejectedQueriesSaving/RejectedQueryDataStore';
+import usedTablesReceiver from "./UsedTablesReceiver";
 
 class TablesStatisticDataStore {
   save() {
@@ -17,20 +17,18 @@ class TablesStatisticDataStore {
       'select query_text from master.suitable_original_queries;',
       (error, queries) => {
         queries.forEach(({ query_text }) => {
-          const { error: parserError = '', tables = [] } = getTableList(
-            query_text
-          );
+          const { error: parserError = '', tables = [] } = usedTablesReceiver(query_text);
 
           if (parserError) {
-            rejectedQueryDataStore.save(
-              parserError,
-              query_text,
-              rejectSourceTypes.PARSER
-            );
+            rejectedQueryDataStore.save({
+              connection,
+              errorText: parserError,
+              rejectedQuery: query_text,
+              type: rejectSourceTypes.PARSER
+            });
           } else if (tables.length > 0 && !parserError) {
             tables.forEach(table => {
-              const tableName = table.split('::')[2];
-              tablesNameList.push(`('${tableName}', 1)`);
+              tablesNameList.push(`('${table}', 1)`);
             });
           }
         });
@@ -40,13 +38,11 @@ class TablesStatisticDataStore {
         connection.query(
           `insert into master.tables_statistic (table_name, call_count) values ${commaSeparatedTableNames} on duplicate key update call_count = call_count + 1;`,
           (tablesError: MysqlError) => {
-            //console.log(tablesError, 'err');
+            console.log(tablesError, 'err');
           }
         );
       }
     );
-
-    connection.end()
   }
 
   getAll(callback) {

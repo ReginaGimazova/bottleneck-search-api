@@ -1,4 +1,4 @@
-import SuitableQueryDataStore from "../dataStores/SuitableQueryDataStore";
+import SuitableQueryDataStore from "./SuitableQueryDataStore";
 
 export const getAll = (req, res) => {
   const suitableQueryDataStore = new SuitableQueryDataStore();

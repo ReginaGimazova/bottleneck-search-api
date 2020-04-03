@@ -3,7 +3,6 @@ import * as bodyParser from 'body-parser'; // can use only for set configuration
 import cors from 'cors';
 import helmet from 'helmet';
 import 'reflect-metadata';
-import routes from './routes';
 
 class App {
   public app: express.Application;
@@ -11,7 +10,7 @@ class App {
   constructor() {
     this.app = express(); // run the express instance and store in app
     this.config();
-    routes(this.app);
+   // routes(this.app);
   }
 
   private config(): void {
