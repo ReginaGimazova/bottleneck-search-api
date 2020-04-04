@@ -1,0 +1,42 @@
+2020-04-04 14:50:34.707 ERROR connect ETIMEDOUT
+{"errorno":"ETIMEDOUT","code":"ETIMEDOUT","syscall":"connect","fatal":true}
+Error: connect ETIMEDOUT
+    at Connection._handleConnectTimeout (/home/regina/Документы/projects/bottleneck-search-api/node_modules/mysql/lib/Connection.js:409:13)
+    at Object.onceWrapper (events.js:288:20)
+    at Socket.emit (events.js:200:13)
+    at Socket.EventEmitter.emit (domain.js:471:20)
+    at Socket._onTimeout (net.js:432:8)
+    at listOnTimeout (internal/timers.js:531:17)
+    at processTimers (internal/timers.js:475:7)
+    --------------------
+    at Protocol._enqueue (/home/regina/Документы/projects/bottleneck-search-api/node_modules/mysql/lib/protocol/Protocol.js:144:48)
+    at Protocol.handshake (/home/regina/Документы/projects/bottleneck-search-api/node_modules/mysql/lib/protocol/Protocol.js:51:23)
+    at Connection.connect (/home/regina/Документы/projects/bottleneck-search-api/node_modules/mysql/lib/Connection.js:116:18)
+    at Connection._implyConnect (/home/regina/Документы/projects/bottleneck-search-api/node_modules/mysql/lib/Connection.js:454:10)
+    at Connection.query (/home/regina/Документы/projects/bottleneck-search-api/node_modules/mysql/lib/Connection.js:196:8)
+    at SuitableQueryDataStore.save (/home/regina/Документы/projects/bottleneck-search-api/src/QueriesFiltering/SuitableQueryDataStore.ts:18:16)
+    at Object.exports.save (/home/regina/Документы/projects/bottleneck-search-api/src/QueriesFiltering/SuitableQueryController.ts:17:26)
+    at Object.<anonymous> (/home/regina/Документы/projects/bottleneck-search-api/src/server.ts:10:1)
+    at Module._compile (internal/modules/cjs/loader.js:774:30)
+    at Module.m._compile (/home/regina/Документы/projects/bottleneck-search-api/node_modules/ts-node/src/index.ts:392:23) 
+2020-04-04 14:58:48.211 ERROR connect ETIMEDOUT
+{"errorno":"ETIMEDOUT","code":"ETIMEDOUT","syscall":"connect","fatal":true}
+Error: connect ETIMEDOUT
+    at Connection._handleConnectTimeout (/home/regina/Документы/projects/bottleneck-search-api/node_modules/mysql/lib/Connection.js:409:13)
+    at Object.onceWrapper (events.js:288:20)
+    at Socket.emit (events.js:200:13)
+    at Socket.EventEmitter.emit (domain.js:471:20)
+    at Socket._onTimeout (net.js:432:8)
+    at listOnTimeout (internal/timers.js:531:17)
+    at processTimers (internal/timers.js:475:7)
+    --------------------
+    at Protocol._enqueue (/home/regina/Документы/projects/bottleneck-search-api/node_modules/mysql/lib/protocol/Protocol.js:144:48)
+    at Protocol.handshake (/home/regina/Документы/projects/bottleneck-search-api/node_modules/mysql/lib/protocol/Protocol.js:51:23)
+    at Connection.connect (/home/regina/Документы/projects/bottleneck-search-api/node_modules/mysql/lib/Connection.js:116:18)
+    at Connection._implyConnect (/home/regina/Документы/projects/bottleneck-search-api/node_modules/mysql/lib/Connection.js:454:10)
+    at Connection.query (/home/regina/Документы/projects/bottleneck-search-api/node_modules/mysql/lib/Connection.js:196:8)
+    at SuitableQueryDataStore.save (/home/regina/Документы/projects/bottleneck-search-api/src/QueriesFiltering/SuitableQueryDataStore.ts:18:16)
+    at Object.exports.save (/home/regina/Документы/projects/bottleneck-search-api/src/QueriesFiltering/SuitableQueryController.ts:17:26)
+    at Object.<anonymous> (/home/regina/Документы/projects/bottleneck-search-api/src/server.ts:10:1)
+    at Module._compile (internal/modules/cjs/loader.js:774:30)
+    at Module.m._compile (/home/regina/Документы/projects/bottleneck-search-api/node_modules/ts-node/src/index.ts:392:23) 
