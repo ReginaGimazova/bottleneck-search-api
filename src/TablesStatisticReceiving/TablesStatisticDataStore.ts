@@ -1,6 +1,6 @@
 import { MysqlError, createConnection } from 'mysql';
 import rejectSourceTypes from '../config/constants';
-import connectionConfig from "../config/connectionConfig";
+import connectionConfig from "../DBConnection/connectionConfig";
 import RejectedQueryDataStore from '../RejectedQueriesSaving/RejectedQueryDataStore';
 import usedTablesReceiver from "./UsedTablesReceiver";
 
@@ -36,7 +36,8 @@ class TablesStatisticDataStore {
         const commaSeparatedTableNames = tablesNameList.join(', ');
 
         connection.query(
-          `insert into master.tables_statistic (table_name, call_count) values ${commaSeparatedTableNames} on duplicate key update call_count = call_count + 1;`,
+          `insert into master.tables_statistic (table_name, call_count) 
+           values ${commaSeparatedTableNames} on duplicate key update call_count = call_count + 1;`,
           (tablesError: MysqlError) => {
             console.log(tablesError, 'err');
           }

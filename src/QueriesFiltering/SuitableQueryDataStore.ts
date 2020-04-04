@@ -1,13 +1,12 @@
-import { createConnection, MysqlError} from 'mysql';
+import { MysqlError} from 'mysql';
 import TablesStatisticDataStore from "../TablesStatisticReceiving/TablesStatisticDataStore";
-import ParametrizedQueriesDataStore from "../OriginalQueriesParametrizing/ParametrizedQueriesDataStore";
-import connectionConfig from "../config/connectionConfig";
+import ParametrizedQueriesDataStore from "../QueriesParametrizing/ParametrizedQueriesDataStore";
+import DBConnection from "../DBConnection/DBConnection";
 
 class SuitableQueryDataStore {
   save() {
-    const connection = createConnection({
-      ...connectionConfig,
-    });
+    const dbConnection = new DBConnection();
+    const  connection = dbConnection.create();
 
     const tablesStatisticDataStore = new TablesStatisticDataStore();
     const parametrizedQueriesDataStore = new ParametrizedQueriesDataStore();
@@ -28,9 +27,8 @@ class SuitableQueryDataStore {
   getAll(callback){
      const queries = [];
 
-    const connection = createConnection({
-      ...connectionConfig
-    });
+    const dbConnection = new DBConnection();
+    const  connection = dbConnection.create();
 
     connection.query('select id, query_text from suitable_original_queries;', (err: MysqlError, result: any) => {
       if (result){

@@ -1,15 +1,27 @@
-import {Parser} from "node-sql-parser";
-import originalQueries from "./originalQueries";
+import { Parser } from 'node-sql-parser';
 
-const DBNameReplacer = (tableName: string, database: string, originalQuery: string) => {
-    const parser = new Parser();
+const DBNameReplacer = (query: string) => {
+  const parser = new Parser();
 
-    const parsedQuery = parser.astify(originalQuery);
-    parsedQuery[0].table[0].table = tableName;
-    parsedQuery[0].table[0].db = database;
-    parsedQuery[0].columns = originalQueries.columns;
+  const mapper = {
+    database: 'master',
+    table_name: 'original_queries',
+    columns: [
+      'event_time',
+      'user_host',
+      'thread_id',
+      'server_id',
+      'command_type',
+      'argument',
+    ],
+  };
 
-    return parser.sqlify(parsedQuery);
+  const parsedQuery = parser.astify(query);
+  parsedQuery[0].table[0].table = mapper.table_name;
+  parsedQuery[0].table[0].db = mapper.database;
+  parsedQuery[0].columns = mapper.columns;
+
+  return parser.sqlify(parsedQuery);
 };
 
 export default DBNameReplacer;

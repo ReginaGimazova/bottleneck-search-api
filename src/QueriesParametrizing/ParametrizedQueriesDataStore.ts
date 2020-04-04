@@ -35,7 +35,8 @@ class ParametrizedQueriesDataStore {
 
         connection.query(
           `insert into master.parametrized_queries (parsed_query, parsed_query_hash, query_count)
-            values (${commaSeparatedParametrizedQueries}) on duplicate key update query_count = query_count + 1`,
+           values (${commaSeparatedParametrizedQueries}) 
+           on duplicate key update query_count = query_count + 1`,
           result => {
             console.log(result);
           }
