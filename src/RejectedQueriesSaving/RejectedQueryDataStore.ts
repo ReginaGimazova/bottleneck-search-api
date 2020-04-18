@@ -1,4 +1,4 @@
-import Logger from "../Logger";
+import Logger from '../helpers/Logger';
 
 class RejectedQueryDataStore {
   save({ connection, errorText = '', rejectedQuery = '', type = '' }) {
@@ -8,9 +8,11 @@ class RejectedQueryDataStore {
       `insert into master.rejected_original_queries (error_text, query_text, type)
        values ('${errorText}', '${rejectedQuery}', '${type}')`,
 
-      (error) => {
-        logger.setLevel('error');
-        logger.logger(error + ' Save rejected queries failed ');
+      error => {
+        if (error) {
+          logger.setLevel('error');
+          logger.logError(error + ' Save rejected route failed ');
+        }
       }
     );
   }

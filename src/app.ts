@@ -4,13 +4,17 @@ import cors from 'cors';
 import helmet from 'helmet';
 import 'reflect-metadata';
 
+import {configurationRoutes} from "./StatusesConfiguration/StatusesConfigurationRoutes";
+import {tableStatisticRoutes} from "./TablesStatistic/TableStatisticRoutes";
+import {parametrizedQueriesRoutes} from './QueriesParametrizing/ParametrizedQueriesRoutes';
+import {initialRoutes} from "./Initial/InitialRoutes";
+
 class App {
   public app: express.Application;
 
   constructor() {
     this.app = express(); // run the express instance and store in app
     this.config();
-   // routes(this.app);
   }
 
   private config(): void {
@@ -25,6 +29,11 @@ class App {
     );
     this.app.use(helmet());
     this.app.use(cors());
+
+    this.app.use('/configuration', configurationRoutes);
+    this.app.use('/tables', tableStatisticRoutes);
+    this.app.use('/queries', parametrizedQueriesRoutes);
+    this.app.use('/start', initialRoutes);
   }
 }
 

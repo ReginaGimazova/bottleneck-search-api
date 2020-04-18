@@ -25,6 +25,7 @@
     "js-sql-parser": "^1.2.1",
     "mysql": "^2.14.1",
     "node-sql-parser": "^1.7.4",
+    "sha1": "^1.1.1",
     "simple-node-logger": "^18.12.24",
     "typeorm": "0.2.22"
   },
