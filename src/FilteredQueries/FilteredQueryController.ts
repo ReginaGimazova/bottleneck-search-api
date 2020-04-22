@@ -1,9 +1,9 @@
-import SuitableQueryDataStore from "./SuitableQueryDataStore";
+import FilteredQueryDataStore from "./FilteredQueryDataStore";
 
 export const getAll = (req, res) => {
-  const suitableQueryDataStore = new SuitableQueryDataStore();
+  const filteredQueryDataStore = new FilteredQueryDataStore();
 
-  suitableQueryDataStore.getAll((data, err) => {
+    filteredQueryDataStore.getAll((data, err) => {
     if (err)
        res.status(500).send({
          message: err.message || "Server error occurred while retrieving suitable route."

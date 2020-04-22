@@ -1,6 +1,6 @@
 import { MysqlError } from 'mysql';
 
-import DBConnection from '../helpers/DBConnection/DBConnection';
+import DBConnection from '../DatabaseAccess/DBConnection';
 import Logger from '../helpers/Logger';
 
 class StatusesConfigurationDataStore {
@@ -14,7 +14,6 @@ class StatusesConfigurationDataStore {
         callback(result, undefined);
       }
       if (err) {
-        logger.setLevel('error');
         logger.logError(err);
         callback(undefined, err);
       }

@@ -10,8 +10,8 @@ class RejectedQueryDataStore {
 
       error => {
         if (error) {
-          logger.setLevel('error');
           logger.logError(error + ' Save rejected route failed ');
+            connection.rollback();
         }
       }
     );

@@ -1,32 +1,38 @@
 import * as fs from 'fs';
-import DBNameReplacer from "./DBNameReplacer";
-import DBConnection from "../helpers/DBConnection/DBConnection";
-import Logger from "../helpers/Logger";
-import SuitableQueryDataStore from "../SuitableQueries/SuitableQueryDataStore";
+import DBNameReplacer from './DBNameReplacer';
+import DBConnection from '../DatabaseAccess/DBConnection';
+import Logger from '../helpers/Logger';
+import FilteredQueryDataStore from '../FilteredQueries/FilteredQueryDataStore';
 
-const sql = fs.readFileSync('/home/regina/Документы/test.sql').toString();
+const sql = fs.readFileSync('/home/regina/Документы/test1.sql').toString();
 
 class OriginalQueryDataStore {
-  save() : void {
+  save(): void {
     const dbConnection = new DBConnection();
     const connection = dbConnection.create();
     const logger = new Logger();
 
-    const suitableQueryDataStore = new SuitableQueryDataStore();
+    const filteredQueryDataStore = new FilteredQueryDataStore();
 
     const queryToSave = DBNameReplacer(sql);
 
-    connection.query(queryToSave, err => {
-      if (err){
-        logger.setLevel('error');
-        logger.logError(err + ' Query Log importing error ');
-        connection.end();
+    connection.beginTransaction((error) => {
+      if (error) {
+        logger.logError(error);
+        throw error;
       }
-      else {
-        suitableQueryDataStore.save(connection);
-      }
+
+      connection.query(queryToSave, (err, result) => {
+        if (err) {
+          logger.logError(err + ' Query Log importing error ');
+          connection.rollback();
+        } else if (result) {
+          console.log('original queries successfully saved')
+          filteredQueryDataStore.save(connection);
+        }
+      });
     });
-  };
+  }
 }
 
 export default OriginalQueryDataStore;

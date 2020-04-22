@@ -19,7 +19,16 @@ const usedTablesReceiver = (selectQuery: string) => {
       });
     }
     if (astElement && astElement.where) {
-      tableList = tableList.concat(goThroughAstObject(astElement.where.left));
+      tableList = tableList.concat(goThroughAstObject(astElement.where));
+    }
+    if (astElement && astElement.left){
+      tableList = tableList.concat(goThroughAstObject(astElement.left));
+    }
+    if (astElement && astElement.right){
+      tableList = tableList.concat(goThroughAstObject(astElement.right));
+    }
+    if (astElement && astElement.expr){
+      tableList = tableList.concat(goThroughAstObject(astElement.expr));
     }
     if (astElement && astElement.from) {
       astElement.from.forEach(value => {

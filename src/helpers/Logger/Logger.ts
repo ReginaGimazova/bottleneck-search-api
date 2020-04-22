@@ -17,6 +17,7 @@ class Logger {
   }
 
   logError(errorMessage: string){
+    this.logger.setLevel('error')
     this.logger.error(errorMessage)
   }
 }

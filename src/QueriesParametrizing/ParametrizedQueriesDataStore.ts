@@ -1,63 +1,63 @@
 import { Connection, MysqlError } from 'mysql';
 import sha from 'sha1';
 
-import rejectSourceTypes from '../helpers/config/constants';
 import RejectedQueryDataStore from '../RejectedQueriesSaving/RejectedQueryDataStore';
 import queryParametrizer from './queryParametrizer';
 import Logger from '../helpers/Logger';
-import DBConnection from "../helpers/DBConnection/DBConnection";
+import DBConnection from '../DatabaseAccess/DBConnection';
 
 class ParametrizedQueriesDataStore {
-  save(connection: Connection) {
+  private static parametrizeQuery({ argument, connection }) {
     const rejectedQueryDataStore = new RejectedQueryDataStore();
-    const logger = new Logger();
-    const parametrizedQueries = [];
-
-    connection.query(
-      'select query_text, id from master.suitable_original_queries;',
-      (error, queries) => {
-        if (queries) {
-          queries.forEach(({ query_text }) => {
-            const {
-              query = '',
-              error: parametrizeError = '',
-            } = queryParametrizer(query_text);
-            if (parametrizeError) {
-              rejectedQueryDataStore.save({
-                connection,
-                errorText: parametrizeError,
-                rejectedQuery: query_text,
-                type: rejectSourceTypes.PARSER,
-              });
-            } else if (!parametrizeError && query) {
-              const hash = sha(query);
-              const valuesTuple = `("${query}", "${hash}", 1)`;
-              parametrizedQueries.push(valuesTuple);
-            }
-          });
-        }
-
-        if (parametrizedQueries.length > 0) {
-          const commaSeparatedParametrizedQueries = parametrizedQueries.join(
-            ', '
-          );
-
-          const insertQuery = `insert into master.parametrized_queries (parsed_query, parsed_query_hash, query_count) values ${commaSeparatedParametrizedQueries} on duplicate key update query_count = query_count + 1`;
-
-          connection.query(insertQuery, err => {
-            if (err) {
-              console.log(err);
-              logger.setLevel('error');
-              logger.logError(err);
-            }
-          });
-        }
-        if (error) {
-          logger.setLevel('error');
-          logger.logError(error);
-        }
-      }
+    const { query = '', error: parametrizeError = '' } = queryParametrizer(
+      argument
     );
+
+    if (parametrizeError) {
+      rejectedQueryDataStore.save({
+        connection,
+        errorText: parametrizeError,
+        rejectedQuery: argument,
+        type: 'PARSER',
+      });
+      return '';
+    } else if (query) {
+      return query;
+    }
+  }
+
+  save(connection: Connection, tuple, callback) {
+    const logger = new Logger();
+
+    const { argument } = tuple;
+    const query = ParametrizedQueriesDataStore.parametrizeQuery({
+      argument,
+      connection,
+    });
+
+    if (!query) {
+      return;
+    }
+
+    const hash = sha(query);
+    const valuesTuple = `("${query}", "${hash}", 1)`;
+
+    const insertQuery = `
+        insert into master.parametrized_queries (parsed_query, parsed_query_hash, query_count) 
+        values ${valuesTuple} 
+        on duplicate key 
+        update query_count = query_count + 1`;
+
+    connection.query(insertQuery, (err, result) => {
+      if (result && result.insertId) {
+        tuple.parametrized_query_id = result.insertId;
+        callback(result.insertId);
+
+      } else if (err) {
+        logger.logError(err);
+        connection.rollback();
+      }
+    });
   }
 
   getAll(callback) {
@@ -65,16 +65,22 @@ class ParametrizedQueriesDataStore {
     const connection = dbConnection.create();
     const logger = new Logger();
 
-    connection.query('', (err: MysqlError, result: any) => {
-      if (result) {
-        callback(result, undefined);
+    connection.query(
+      'select id, parsed_query, query_count ' +
+        'from master.parametrized_queries ' +
+        'order by query_count desc;',
+
+      (err: MysqlError, result: any) => {
+        if (result) {
+          callback(result, undefined);
+        }
+        if (err) {
+          logger.logError(err);
+          callback(undefined, err);
+        }
       }
-      if (err) {
-        logger.setLevel('error');
-        logger.logError(err);
-        callback(undefined, err);
-      }
-    });
+    );
+
     connection.end();
   }
 }
