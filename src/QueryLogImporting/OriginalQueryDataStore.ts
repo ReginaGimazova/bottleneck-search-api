@@ -1,10 +1,13 @@
 import * as fs from 'fs';
+require('dotenv').config()
+
 import DBNameReplacer from './DBNameReplacer';
 import DBConnection from '../DatabaseAccess/DBConnection';
 import Logger from '../helpers/Logger';
 import FilteredQueryDataStore from '../FilteredQueries/FilteredQueryDataStore';
 
-const sql = fs.readFileSync('/home/regina/Документы/test1.sql').toString();
+const { LOG_PATH } = process.env;
+const sql = fs.readFileSync(LOG_PATH).toString();
 
 class OriginalQueryDataStore {
   save(): void {
