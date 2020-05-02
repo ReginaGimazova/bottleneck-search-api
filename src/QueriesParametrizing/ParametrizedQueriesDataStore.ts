@@ -29,7 +29,7 @@ class ParametrizedQueriesDataStore {
   save(connection: Connection, tuple, callback) {
     const logger = new Logger();
 
-    const { argument } = tuple;
+    const { argument, user_host } = tuple;
     const query = ParametrizedQueriesDataStore.parametrizeQuery({
       argument,
       connection,
@@ -40,10 +40,10 @@ class ParametrizedQueriesDataStore {
     }
 
     const hash = sha(query);
-    const valuesTuple = `("${query}", "${hash}", 1)`;
+    const valuesTuple = `("${query}", "${hash}", "${user_host}", 1)`;
 
     const insertQuery = `
-        insert into master.parametrized_queries (parsed_query, parsed_query_hash, query_count) 
+        insert into master.parametrized_queries (parsed_query, parsed_query_hash, user_host, query_count) 
         values ${valuesTuple} 
         on duplicate key 
         update query_count = query_count + 1`;
@@ -52,7 +52,6 @@ class ParametrizedQueriesDataStore {
       if (result && result.insertId) {
         tuple.parametrized_query_id = result.insertId;
         callback(result.insertId);
-
       } else if (err) {
         logger.logError(err);
         connection.rollback();
@@ -60,7 +59,31 @@ class ParametrizedQueriesDataStore {
     });
   }
 
-  getAll(callback) {
+  getAllGroupBySql(callback) {
+    const dbConnection = new DBConnection();
+    const connection = dbConnection.create();
+    const logger = new Logger();
+
+    connection.query(
+      'select id, parsed_query, SUM(query_count) as query_count ' +
+        'from master.parametrized_queries ' +
+        'group by parsed_query_hash;',
+
+      (err: MysqlError, result: any) => {
+        if (result) {
+          callback(result, undefined);
+        }
+        if (err) {
+          logger.logError(err);
+          callback(undefined, err);
+        }
+      }
+    );
+
+    connection.end();
+  }
+
+  getAllGroupBySqlAndHost(callback) {
     const dbConnection = new DBConnection();
     const connection = dbConnection.create();
     const logger = new Logger();

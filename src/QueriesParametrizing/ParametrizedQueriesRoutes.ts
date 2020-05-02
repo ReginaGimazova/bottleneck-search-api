@@ -9,9 +9,13 @@ class ParametrizedQueriesRoutes {
   }
 
   private config(): void {
-    this.router.get('/', (req: express.Request, res: express.Response) =>
-      parametrizedQueriesController.getAll(req, res)
-    );
+    this.router.get('/', (req: express.Request, res: express.Response) => {
+      if (req.query.host === 'true'){
+        parametrizedQueriesController.getQueriesGroupBySqlAndHost(req, res)
+      } else {
+        parametrizedQueriesController.getQueriesGroupBySql(req, res)
+      }
+    });
   }
 }
 
