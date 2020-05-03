@@ -1,11 +1,21 @@
-import { MysqlError } from 'mysql';
+import { promisify } from 'util';
+import countBy from 'lodash/countBy';
+
 import RejectedQueryDataStore from '../RejectedQueriesSaving/RejectedQueryDataStore';
 import usedTablesReceiver from './UsedTablesReceiver';
 import Logger from '../helpers/Logger';
 import DBConnection from '../DatabaseAccess/DBConnection';
 
 class TablesStatisticDataStore {
-  // TODO: combine function with getAll in FilteredQueryDataStore
+  private createQueriesTuple(queriesArray) {
+    return queriesArray.map(item => {
+      return {
+        query_id: item.id,
+        table_ids: new Set(),
+        tables: [],
+      };
+    });
+  }
 
   /**
    *
@@ -15,8 +25,8 @@ class TablesStatisticDataStore {
    * This function takes tuple as argument and returns ready for insert query string
    * table_ids, query_id - tuple fields
    */
-  private convertTupleToQueryString({table_ids, query_id}) {
-    return table_ids.map(tableId => {
+  private convertTupleToQueryString({ table_ids, query_id }) {
+    return [...table_ids].map(tableId => {
       return `('${query_id}', '${tableId}')`;
     });
   }
@@ -24,23 +34,11 @@ class TablesStatisticDataStore {
   /**
    *
    * @param connection
-   * @param callback
    *
    */
-  private getAllFilteredQueries(connection, callback) {
-    const logger = new Logger();
-
-    connection.query(
-      'select id, query_text from master.filtered_queries',
-      (error: MysqlError, result) => {
-        if (result) {
-          callback(result);
-        } else if (error) {
-          logger.logError(error);
-          callback([]);
-        }
-      }
-    );
+  private getAllFilteredQueries(connection) {
+    const promisifyQuery = promisify(connection.query).bind(connection);
+    return promisifyQuery('select id, query_text from master.filtered_queries');
   }
 
   private parseTablesFromQuery({ query_text, connection }) {
@@ -62,76 +60,94 @@ class TablesStatisticDataStore {
     return tables;
   }
 
-  private saveQueryToTablesRelation(connection, isThroughFinalQuery, tuple) {
+  private saveQueryToTablesRelation({ connection, tuple, isThroughFinalQuery }) {
+    const promisifyQuery = promisify(connection.query).bind(connection);
     const logger = new Logger();
+
     const insertQuery = this.convertTupleToQueryString(tuple).join(', ');
 
-    connection.query(
-      `insert into master.queries_to_tables (query_id, table_id) VALUES ${insertQuery}`,
-      (queryTableError: MysqlError, result) => {
-        if (queryTableError) {
-          logger.logError(queryTableError);
-          connection.rollback();
-        } else if (result && isThroughFinalQuery) {
+    promisifyQuery(
+      `insert into master.queries_to_tables (query_id, table_id) VALUES ${insertQuery}`
+    )
+      .then(result => {
+        if (result && isThroughFinalQuery) {
           connection.commit();
-          console.log('Table - queries relations successfully saved.')
+          console.log('Table - queries relations successfully saved.');
           connection.end();
         }
-      }
-    );
+      })
+      .catch(queryTableError => {
+        logger.logError(queryTableError);
+        connection.rollback();
+      });
   }
 
-  // TODO: refactor method
-
-  save(connection) {
+  /**
+   *
+   * @param table
+   * @param connection
+   */
+  private insertTables = ({ tuple, connection, isThroughFinalQuery }) => {
+    const promisifyQuery = promisify(connection.query).bind(connection);
     const logger = new Logger();
 
-    this.getAllFilteredQueries(connection, queries => {
-      if (!queries.length) {
-        return;
-      }
+    const { tables, table_ids } = tuple;
+    const tableNames = Object.keys(tables);
 
-      queries.forEach((query, index) => {
-        const { query_text, id } = query;
-        const tables = this.parseTablesFromQuery({ query_text, connection });
-        const tuple = {
-          query_id: id,
-          table_ids: [...new Set()],
-        };
+    tableNames.forEach((name, index) => {
+      const count = tables[name];
+      const tableValue = `('${name}', ${count})`;
 
-        tables.forEach((table, tableIndex) => {
-          const tableValue = `('${table}', 1)`;
+      const insertQueryString = `
+        insert into master.tables_statistic (table_name, call_count) 
+        values ${tableValue} 
+        on duplicate key update call_count = call_count + ${count};`;
 
-          const insertQueryString = `
-              insert into master.tables_statistic (table_name, call_count) 
-              values ${tableValue} 
-              on duplicate key update call_count = call_count + 1;`;
+      promisifyQuery(insertQueryString)
+        .then(({ insertId }) => {
+          table_ids.add(insertId);
 
-          const isThroughFinalQuery = index === queries.length - 1;
-          const isThroughFinalTable = tableIndex === tables.length - 1;
+          if (index === tableNames.length - 1) {
+            this.saveQueryToTablesRelation({ connection, tuple, isThroughFinalQuery });
+          }
+        })
+        .catch(insertTableError => {
+          logger.logError(insertTableError);
+          connection.rollback();
+        });
+    });
+  };
 
-          connection.query(
-            insertQueryString,
-            (tablesError: MysqlError, result) => {
-              if (tablesError) {
-                logger.logError(tablesError);
-                connection.rollback();
-              } else if (result) {
-                tuple.table_ids.push(result.insertId);
+  async save(connection) {
+    const logger = new Logger();
 
-                if (isThroughFinalTable) {
-                  this.saveQueryToTablesRelation(
-                    connection,
-                    isThroughFinalQuery,
-                    tuple
-                  );
-                }
-              }
-            }
+    this.getAllFilteredQueries(connection)
+      .then(queries => {
+        if (!queries.length) {
+          return;
+        }
+
+        const tuples = this.createQueriesTuple(queries);
+
+        queries.forEach((query, index) => {
+          const { query_text } = query;
+          tuples[index].tables = countBy(
+            this.parseTablesFromQuery({
+              query_text,
+              connection,
+            })
           );
         });
+
+        tuples.forEach((tuple, index) => {
+          const isThroughFinalQuery = index === (tuples.length - 1);
+          this.insertTables({ tuple, connection, isThroughFinalQuery });
+        });
+      })
+      .catch(error => {
+        logger.logError(error.message);
+        connection.rollback();
       });
-    });
   }
 
   getAll(callback) {

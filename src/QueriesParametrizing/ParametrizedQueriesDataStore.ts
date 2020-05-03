@@ -59,50 +59,57 @@ class ParametrizedQueriesDataStore {
     });
   }
 
-  getAllGroupBySql(callback) {
-    const dbConnection = new DBConnection();
-    const connection = dbConnection.create();
-    const logger = new Logger();
+  getAll({ tables, byHost, callback }) {
+    const tablesToString =
+      tables.length > 0 ? tables.map(table => `"${table}"`).join(', ') : '';
 
-    connection.query(
-      'select id, parsed_query, SUM(query_count) as query_count ' +
-        'from master.parametrized_queries ' +
-        'group by parsed_query_hash;',
+    const groupBySqlQueryString =
+      `select id, parsed_query, SUM(query_count) as query_count ` +
+      `from master.parametrized_queries ` +
+      `group by parsed_query_hash;`;
 
-      (err: MysqlError, result: any) => {
-        if (result) {
-          callback(result, undefined);
-        }
-        if (err) {
-          logger.logError(err);
-          callback(undefined, err);
-        }
-      }
-    );
-
-    connection.end();
-  }
-
-  getAllGroupBySqlAndHost(callback) {
-    const dbConnection = new DBConnection();
-    const connection = dbConnection.create();
-    const logger = new Logger();
-
-    connection.query(
+    const groupBySqlAndHostQueryString =
       'select id, parsed_query, query_count ' +
-        'from master.parametrized_queries ' +
-        'order by query_count desc;',
+      'from master.parametrized_queries ' +
+      'order by query_count desc;';
 
-      (err: MysqlError, result: any) => {
-        if (result) {
-          callback(result, undefined);
-        }
-        if (err) {
-          logger.logError(err);
-          callback(undefined, err);
-        }
+    const groupBySqlWithTables =
+      `select parametrized_queries.id, parsed_query, query_count ` +
+      `from ( select id from tables_statistic where table_name in ("${tablesToString}")) as tables ` +
+      `inner join queries_to_tables on table_id = tables.id ` +
+      `inner join filtered_queries on queries_to_tables.query_id = filtered_queries.id ` +
+      `inner join parametrized_queries on filtered_queries.parametrized_query_id = parametrized_queries.id group by parsed_query_hash;`;
+
+    const groupBySqlAndHostWithTables =
+      `select parametrized_queries.id, parsed_query, query_count ` +
+      `from ( select id from tables_statistic where table_name in (${tablesToString})) as tables ` +
+      `inner join queries_to_tables on table_id = tables.id ` +
+      `inner join filtered_queries on queries_to_tables.query_id = filtered_queries.id ` +
+      `inner join parametrized_queries on filtered_queries.parametrized_query_id = parametrized_queries.id order by query_count desc;`;
+
+    const dbConnection = new DBConnection();
+    const connection = dbConnection.create();
+    const logger = new Logger();
+
+    let queryString = groupBySqlQueryString;
+
+    if (byHost && !tables.length) {
+      queryString = groupBySqlAndHostQueryString;
+    } else if (byHost && tables.length) {
+      queryString = groupBySqlAndHostWithTables;
+    } else if (!byHost && tables.length) {
+      queryString = groupBySqlWithTables;
+    }
+
+    connection.query(queryString, (err: MysqlError, result: any) => {
+      if (result) {
+        callback(result, undefined);
       }
-    );
+      if (err) {
+        logger.logError(err);
+        callback(undefined, err);
+      }
+    });
 
     connection.end();
   }
