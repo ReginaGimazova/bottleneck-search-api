@@ -8,6 +8,7 @@ import {configurationRoutes} from "./StatusesConfiguration/StatusesConfiguration
 import {tableStatisticRoutes} from "./TablesStatistic/TableStatisticRoutes";
 import {parametrizedQueriesRoutes} from './QueriesParametrizing/ParametrizedQueriesRoutes';
 import {initialRoutes} from "./Initial/InitialRoutes";
+import {analyzeProgressRoute} from './AnalyzeProgress/AnalyzeProgressRoute';
 
 class App {
   public app: express.Application;
@@ -34,6 +35,7 @@ class App {
     this.app.use('/tables', tableStatisticRoutes);
     this.app.use('/queries', parametrizedQueriesRoutes);
     this.app.use('/start', initialRoutes);
+    this.app.use('/progress', analyzeProgressRoute);
   }
 }
 

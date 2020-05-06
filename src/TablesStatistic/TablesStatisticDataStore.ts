@@ -5,6 +5,7 @@ import RejectedQueryDataStore from '../RejectedQueriesSaving/RejectedQueryDataSt
 import usedTablesReceiver from './UsedTablesReceiver';
 import Logger from '../helpers/Logger';
 import DBConnection from '../DatabaseAccess/DBConnection';
+import {analyzeProgress} from "../AnalyzeProgress/AnalyzeProgress";
 
 class TablesStatisticDataStore {
   private createQueriesTuple(queriesArray) {
@@ -78,6 +79,8 @@ class TablesStatisticDataStore {
             logger.logError(error)
             connection.rollback()
           } else {
+            analyzeProgress.updateProgress(100);
+
             console.log('Table - queries relations successfully saved.');
           }
           connection.end();
@@ -129,6 +132,8 @@ class TablesStatisticDataStore {
         table_ids.add(insertId);
 
         if (index === (tableNames.length - 1)) {
+          analyzeProgress.updateProgress(80);
+
           await this.saveQueryToTablesRelation({
             connection,
             tuple,

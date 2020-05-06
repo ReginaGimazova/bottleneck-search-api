@@ -5,6 +5,7 @@ import TablesStatisticDataStore from '../TablesStatistic/TablesStatisticDataStor
 import ParametrizedQueriesDataStore from '../QueriesParametrizing/ParametrizedQueriesDataStore';
 import DBConnection from '../DatabaseAccess/DBConnection';
 import Logger from '../helpers/Logger';
+import {analyzeProgress} from "../AnalyzeProgress/AnalyzeProgress";
 
 class FilteredQueryDataStore {
   /**
@@ -66,6 +67,7 @@ class FilteredQueryDataStore {
         const correctTuples = tuples.filter(t => t);
 
         if (!(correctTuples.find(t => !t.parametrized_query_id))) {
+          analyzeProgress.updateProgress(40);
           callback(correctTuples);
         }
       } catch (error) {
@@ -131,6 +133,7 @@ class FilteredQueryDataStore {
 
             try {
               await promisifyQuery(insertQuery);
+              analyzeProgress.updateProgress(60);
               console.log('Filtered queries successfully saved.');
 
               connection.query('SET FOREIGN_KEY_CHECKS = 1;');

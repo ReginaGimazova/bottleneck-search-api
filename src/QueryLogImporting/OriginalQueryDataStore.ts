@@ -6,6 +6,7 @@ import DBNameReplacer from './DBNameReplacer';
 import DBConnection from '../DatabaseAccess/DBConnection';
 import Logger from '../helpers/Logger';
 import FilteredQueryDataStore from '../FilteredQueries/FilteredQueryDataStore';
+import {analyzeProgress} from "../AnalyzeProgress/AnalyzeProgress";
 
 const { LOG_PATH } = process.env;
 const sql = fs.readFileSync(LOG_PATH).toString();
@@ -31,7 +32,7 @@ class OriginalQueryDataStore {
           logger.logError(err + ' Query Log importing error ');
           connection.rollback();
         } else if (result) {
-          console.log('original queries successfully saved')
+          analyzeProgress.updateProgress(20);
           filteredQueryDataStore.save(connection);
         }
       });
