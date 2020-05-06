@@ -1,5 +1,6 @@
 import { Connection, MysqlError } from 'mysql';
 import sha from 'sha1';
+import {promisify} from "util";
 
 import RejectedQueryDataStore from '../RejectedQueriesSaving/RejectedQueryDataStore';
 import queryParametrizer from './queryParametrizer';
@@ -26,8 +27,8 @@ class ParametrizedQueriesDataStore {
     }
   }
 
-  save(connection: Connection, tuple, callback) {
-    const logger = new Logger();
+  save(connection: Connection, tuple) {
+    const promisifyQuery = promisify(connection.query).bind(connection);
 
     const { argument, user_host } = tuple;
     const query = ParametrizedQueriesDataStore.parametrizeQuery({
@@ -36,7 +37,7 @@ class ParametrizedQueriesDataStore {
     });
 
     if (!query) {
-      return;
+      return undefined;
     }
 
     const hash = sha(query);
@@ -48,15 +49,7 @@ class ParametrizedQueriesDataStore {
         on duplicate key 
         update query_count = query_count + 1`;
 
-    connection.query(insertQuery, (err, result) => {
-      if (result && result.insertId) {
-        tuple.parametrized_query_id = result.insertId;
-        callback(result.insertId);
-      } else if (err) {
-        logger.logError(err);
-        connection.rollback();
-      }
-    });
+    return promisifyQuery(insertQuery);
   }
 
   getAll({ tables, byHost, callback }) {
@@ -64,40 +57,40 @@ class ParametrizedQueriesDataStore {
       tables.length > 0 ? tables.map(table => `"${table}"`).join(', ') : '';
 
     const groupBySqlQueryString =
-      `select id, parsed_query, SUM(query_count) as query_count ` +
-      `from master.parametrized_queries ` +
-      `group by parsed_query_hash;`;
+      `select id, parsed_query, SUM(query_count) as query_count from master.parametrized_queries 
+       group by parsed_query_hash order by query_count desc;`;
 
     const groupBySqlAndHostQueryString =
-      'select id, parsed_query, query_count ' +
-      'from master.parametrized_queries ' +
-      'order by query_count desc;';
+      'select id, parsed_query, query_count from master.parametrized_queries order by query_count desc;';
 
     const groupBySqlWithTables =
-      `select parametrized_queries.id, parsed_query, query_count ` +
-      `from ( select id from tables_statistic where table_name in ("${tablesToString}")) as tables ` +
-      `inner join queries_to_tables on table_id = tables.id ` +
-      `inner join filtered_queries on queries_to_tables.query_id = filtered_queries.id ` +
-      `inner join parametrized_queries on filtered_queries.parametrized_query_id = parametrized_queries.id group by parsed_query_hash;`;
+      `select parametrized_queries.id, parsed_query, query_count from 
+       ( select id from tables_statistic where table_name in (${tablesToString})) as tables
+       inner join queries_to_tables on table_id = tables.id
+       inner join filtered_queries on queries_to_tables.query_id = filtered_queries.id
+       inner join parametrized_queries on filtered_queries.parametrized_query_id = parametrized_queries.id 
+       group by parsed_query_hash order by sum(query_count) desc;`;
 
     const groupBySqlAndHostWithTables =
-      `select parametrized_queries.id, parsed_query, query_count ` +
-      `from ( select id from tables_statistic where table_name in (${tablesToString})) as tables ` +
-      `inner join queries_to_tables on table_id = tables.id ` +
-      `inner join filtered_queries on queries_to_tables.query_id = filtered_queries.id ` +
-      `inner join parametrized_queries on filtered_queries.parametrized_query_id = parametrized_queries.id order by query_count desc;`;
+      `select parametrized_queries.id, parsed_query, query_count from 
+       ( select id from tables_statistic where table_name in (${tablesToString})) as tables 
+       inner join queries_to_tables on table_id = tables.id 
+       inner join filtered_queries on queries_to_tables.query_id = filtered_queries.id 
+       inner join parametrized_queries on filtered_queries.parametrized_query_id = parametrized_queries.id 
+       order by query_count desc;`;
 
     const dbConnection = new DBConnection();
     const connection = dbConnection.create();
     const logger = new Logger();
 
     let queryString = groupBySqlQueryString;
+    const searchQueriesWithTables = !!tables.length;
 
-    if (byHost && !tables.length) {
+    if (byHost && !searchQueriesWithTables) {
       queryString = groupBySqlAndHostQueryString;
-    } else if (byHost && tables.length) {
+    } else if (byHost && searchQueriesWithTables) {
       queryString = groupBySqlAndHostWithTables;
-    } else if (!byHost && tables.length) {
+    } else if (!byHost && searchQueriesWithTables) {
       queryString = groupBySqlWithTables;
     }
 

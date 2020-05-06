@@ -4,17 +4,18 @@ class RejectedQueryDataStore {
   save({ connection, errorText = '', rejectedQuery = '', type = '' }) {
     const logger = new Logger();
 
-    connection.query(
+    const insertQuery =
       `insert into master.rejected_original_queries (error_text, query_text, type)
-       values ('${errorText}', '${rejectedQuery}', '${type}')`,
+       values ?`;
 
-      error => {
-        if (error) {
-          logger.logError(error + ' Save rejected route failed ');
-            connection.rollback();
-        }
+    const values = [[errorText, rejectedQuery, type]];
+
+    connection.query(insertQuery, [values], error => {
+      if (error) {
+        logger.logError(error + ' Save rejected query failed ');
+        connection.rollback();
       }
-    );
+    });
   }
 }
 

@@ -1,4 +1,5 @@
 import {Connection, createConnection} from 'mysql';
+// tslint:disable-next-line:no-var-requires
 require('dotenv').config()
 
 const { DB_HOST, DB_USER, DB_PASSWORD, DB_DATABASE } = process.env;

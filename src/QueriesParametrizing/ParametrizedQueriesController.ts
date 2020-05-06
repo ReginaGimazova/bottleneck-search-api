@@ -4,7 +4,7 @@ import ParametrizedQueriesDataStore from './ParametrizedQueriesDataStore';
 export class ParametrizedQueriesController {
   public getQueries(req: Request, res: Response) {
     const parametrizedQueriesDataStore = new ParametrizedQueriesDataStore();
-    const byHost = req.query.host;
+    const byHost = JSON.parse(req.query.host);
     const tables = JSON.parse(req.query.search_tables);
 
     parametrizedQueriesDataStore.getAll({byHost, tables: tables || [], callback: (data, err) => {

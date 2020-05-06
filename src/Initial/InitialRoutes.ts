@@ -9,9 +9,10 @@ class InitialRoutes {
   }
 
   private config(): void {
-    this.router.post('/', () =>
-      initialController.init()
-    );
+    this.router.post('/', (req: express.Request, res: express.Response) => {
+      res.sendStatus(200);
+      initialController.init();
+    });
   }
 }
 

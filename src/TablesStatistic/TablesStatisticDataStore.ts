@@ -60,26 +60,34 @@ class TablesStatisticDataStore {
     return tables;
   }
 
-  private saveQueryToTablesRelation({ connection, tuple, isThroughFinalQuery }) {
+  private async saveQueryToTablesRelation({
+    connection,
+    tuple,
+    isThroughFinalQuery,
+  }) {
     const promisifyQuery = promisify(connection.query).bind(connection);
     const logger = new Logger();
 
     const insertQuery = this.convertTupleToQueryString(tuple).join(', ');
 
-    promisifyQuery(
-      `insert into master.queries_to_tables (query_id, table_id) VALUES ${insertQuery}`
-    )
-      .then(result => {
-        if (result && isThroughFinalQuery) {
-          connection.commit();
-          console.log('Table - queries relations successfully saved.');
+    try {
+      await promisifyQuery(`insert into master.queries_to_tables (query_id, table_id) VALUES ${insertQuery}`)
+      if (isThroughFinalQuery) {
+        connection.commit(error => {
+          if (error){
+            logger.logError(error)
+            connection.rollback()
+          } else {
+            console.log('Table - queries relations successfully saved.');
+          }
           connection.end();
-        }
-      })
-      .catch(queryTableError => {
-        logger.logError(queryTableError);
-        connection.rollback();
-      });
+
+        });
+      }
+    } catch (queryTableError) {
+      logger.logError(queryTableError);
+      connection.rollback();
+    }
   }
 
   /**
@@ -94,7 +102,20 @@ class TablesStatisticDataStore {
     const { tables, table_ids } = tuple;
     const tableNames = Object.keys(tables);
 
-    tableNames.forEach((name, index) => {
+    if (isThroughFinalQuery && !Object.entries(tables).length){
+      connection.commit((error) => {
+        if (error){
+          logger.logError(error)
+          connection.rollback()
+        } else {
+          console.log('Success.');
+        }
+
+        connection.end();
+      });
+    }
+
+    tableNames.forEach(async (name, index) => {
       const count = tables[name];
       const tableValue = `('${name}', ${count})`;
 
@@ -103,18 +124,21 @@ class TablesStatisticDataStore {
         values ${tableValue} 
         on duplicate key update call_count = call_count + ${count};`;
 
-      promisifyQuery(insertQueryString)
-        .then(({ insertId }) => {
-          table_ids.add(insertId);
+      try {
+        const { insertId } = await promisifyQuery(insertQueryString);
+        table_ids.add(insertId);
 
-          if (index === tableNames.length - 1) {
-            this.saveQueryToTablesRelation({ connection, tuple, isThroughFinalQuery });
-          }
-        })
-        .catch(insertTableError => {
-          logger.logError(insertTableError);
-          connection.rollback();
-        });
+        if (index === (tableNames.length - 1)) {
+          await this.saveQueryToTablesRelation({
+            connection,
+            tuple,
+            isThroughFinalQuery,
+          });
+        }
+      } catch (insertTableError) {
+        logger.logError(insertTableError);
+        connection.rollback();
+      }
     });
   };
 

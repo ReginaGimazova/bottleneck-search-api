@@ -1,4 +1,5 @@
 import * as fs from 'fs';
+// tslint:disable-next-line:no-var-requires
 require('dotenv').config()
 
 import DBNameReplacer from './DBNameReplacer';
