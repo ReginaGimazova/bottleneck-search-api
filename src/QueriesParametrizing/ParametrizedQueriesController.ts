@@ -6,6 +6,9 @@ export class ParametrizedQueriesController {
     const parametrizedQueriesDataStore = new ParametrizedQueriesDataStore();
     const byHost = JSON.parse(req.query.host);
     const tables = JSON.parse(req.query.search_tables);
+    let page = JSON.parse(req.query.page);
+
+    const limit = 10;
 
     parametrizedQueriesDataStore.getAll({byHost, tables: tables || [], callback: (data, err) => {
       if (err)
@@ -14,7 +17,19 @@ export class ParametrizedQueriesController {
             err.message ||
             'Server error occurred while retrieving parametrized queries.',
         });
-      else res.status(200).send(data);
+      else {
+        const pageCount = Math.ceil(data.length / 10);
+        // tslint:disable-next-line:radix
+        if (!page) { page = 1;}
+        if (page > pageCount) {
+          page = pageCount
+        }
+        res.status(200).send({
+          page,
+          page_count: pageCount,
+          queries: data.slice(page * limit - limit, page * limit)
+        });
+      }
     }});
   }
 }

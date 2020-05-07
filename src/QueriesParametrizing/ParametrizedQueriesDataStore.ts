@@ -1,6 +1,6 @@
 import { Connection, MysqlError } from 'mysql';
 import sha from 'sha1';
-import {promisify} from "util";
+import { promisify } from 'util';
 
 import RejectedQueryDataStore from '../RejectedQueriesSaving/RejectedQueryDataStore';
 import queryParametrizer from './queryParametrizer';

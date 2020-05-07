@@ -1,4 +1,5 @@
 import express from 'express';
+import paginate from 'express-paginate';
 import * as bodyParser from 'body-parser'; // can use only for set configuration, otherwise remove this dependency
 import cors from 'cors';
 import helmet from 'helmet';
@@ -19,6 +20,8 @@ class App {
   }
 
   private config(): void {
+    this.app.use(paginate.middleware(10, 50));
+
     // support application/json type post data
     this.app.use(bodyParser.json());
 
