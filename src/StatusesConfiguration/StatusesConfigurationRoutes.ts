@@ -9,10 +9,12 @@ class StatusesConfigurationRoutes {
   }
 
   private config(): void {
-    this.router.get(
-      '/',
-      (req: express.Request, res: express.Response) =>
-        configurationController.getAll(req, res)
+    this.router.get('/', (req: express.Request, res: express.Response) =>
+      configurationController.getAll(req, res)
+    );
+
+    this.router.post('/', (req: express.Request, res: express.Response) =>
+      configurationController.save(req, res)
     );
   }
 }
