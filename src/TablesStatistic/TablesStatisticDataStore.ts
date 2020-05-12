@@ -5,7 +5,8 @@ import RejectedQueryDataStore from '../RejectedQueriesSaving/RejectedQueryDataSt
 import usedTablesReceiver from './UsedTablesReceiver';
 import Logger from '../helpers/Logger';
 import DBConnection from '../DatabaseAccess/DBConnection';
-import {analyzeProgress} from "../AnalyzeProgress/AnalyzeProgress";
+import { analyzeProgress } from '../AnalyzeProgress/AnalyzeProgress';
+import {connectionConfig} from "../DatabaseAccess/ConnectionConfig";
 
 class TablesStatisticDataStore {
   private createQueriesTuple(queriesArray) {
@@ -72,20 +73,17 @@ class TablesStatisticDataStore {
     const insertQuery = this.convertTupleToQueryString(tuple).join(', ');
 
     try {
-      await promisifyQuery(`insert into master.queries_to_tables (query_id, table_id) VALUES ${insertQuery}`)
+      connection.query('SET FOREIGN_KEY_CHECKS = 0;');
+
+      await promisifyQuery(
+        `insert into master.queries_to_tables (query_id, table_id) VALUES ${insertQuery}`
+      );
+      connection.query('SET FOREIGN_KEY_CHECKS = 0;');
+
       if (isThroughFinalQuery) {
-        connection.commit(error => {
-          if (error){
-            logger.logError(error)
-            connection.rollback()
-          } else {
-            analyzeProgress.updateProgress(100);
+        analyzeProgress.updateProgress(100);
 
-            console.log('Table - queries relations successfully saved.');
-          }
-          connection.end();
-
-        });
+        console.log('Table - queries relations successfully saved.');
       }
     } catch (queryTableError) {
       logger.logError(queryTableError);
@@ -105,17 +103,8 @@ class TablesStatisticDataStore {
     const { tables, table_ids } = tuple;
     const tableNames = Object.keys(tables);
 
-    if (isThroughFinalQuery && !Object.entries(tables).length){
-      connection.commit((error) => {
-        if (error){
-          logger.logError(error)
-          connection.rollback()
-        } else {
-          console.log('Success.');
-        }
-
-        connection.end();
-      });
+    if (isThroughFinalQuery && !Object.entries(tables).length) {
+      analyzeProgress.updateProgress(100);
     }
 
     tableNames.forEach(async (name, index) => {
@@ -131,7 +120,7 @@ class TablesStatisticDataStore {
         const { insertId } = await promisifyQuery(insertQueryString);
         table_ids.add(insertId);
 
-        if (index === (tableNames.length - 1)) {
+        if (index === tableNames.length - 1) {
           analyzeProgress.updateProgress(80);
 
           await this.saveQueryToTablesRelation({
@@ -169,7 +158,7 @@ class TablesStatisticDataStore {
         });
 
         tuples.forEach((tuple, index) => {
-          const isThroughFinalQuery = index === (tuples.length - 1);
+          const isThroughFinalQuery = index === tuples.length - 1;
           this.insertTables({ tuple, connection, isThroughFinalQuery });
         });
       })
@@ -181,7 +170,7 @@ class TablesStatisticDataStore {
 
   getAll(callback) {
     const dbConnection = new DBConnection();
-    const connection = dbConnection.create();
+    const connection = dbConnection.create(connectionConfig);
     const logger = new Logger();
 
     connection.query(

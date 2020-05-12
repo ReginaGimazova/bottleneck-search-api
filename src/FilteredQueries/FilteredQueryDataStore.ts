@@ -6,6 +6,8 @@ import ParametrizedQueriesDataStore from '../QueriesParametrizing/ParametrizedQu
 import DBConnection from '../DatabaseAccess/DBConnection';
 import Logger from '../helpers/Logger';
 import {analyzeProgress} from "../AnalyzeProgress/AnalyzeProgress";
+import ExplainQueriesDataStore from "../ExplainQueries/ExplainQueriesDataStore";
+import {connectionConfig} from "../DatabaseAccess/ConnectionConfig";
 
 class FilteredQueryDataStore {
   /**
@@ -105,6 +107,16 @@ class FilteredQueryDataStore {
    *
    * @param connection
    *
+   */
+  private getAllFilteredQueries(connection) {
+    const promisifyQuery = promisify(connection.query).bind(connection);
+    return promisifyQuery('select id, query_text from master.filtered_queries');
+  }
+
+  /**
+   *
+   * @param connection
+   *
    * Insert filtered queries and call saving tables
    */
   save(connection) {
@@ -112,6 +124,7 @@ class FilteredQueryDataStore {
     const promisifyQuery = promisify(connection.query).bind(connection);
 
     const tablesStatisticDataStore = new TablesStatisticDataStore();
+    const explainQueriesDataStore = new ExplainQueriesDataStore();
 
     this.retrieveOriginalQueriesAccordingToFilter({
       promisifyQuery,
@@ -134,13 +147,18 @@ class FilteredQueryDataStore {
             try {
               await promisifyQuery(insertQuery);
               analyzeProgress.updateProgress(60);
-              console.log('Filtered queries successfully saved.');
-
               connection.query('SET FOREIGN_KEY_CHECKS = 1;');
-
-              await tablesStatisticDataStore.save(connection);
             } catch (insertError) {
               logger.logError(insertError);
+              connection.rollback();
+            }
+
+            try{
+              const filteredQueries = await this.getAllFilteredQueries(connection);
+              await tablesStatisticDataStore.save(connection);
+              await explainQueriesDataStore.save({connection, queries: filteredQueries});
+            } catch (e) {
+              logger.logError(e);
               connection.rollback();
             }
           },
@@ -160,7 +178,7 @@ class FilteredQueryDataStore {
     const queries = [];
 
     const dbConnection = new DBConnection();
-    const connection = dbConnection.create();
+    const connection = dbConnection.create(connectionConfig);
     const logger = new Logger();
 
     connection.query(
