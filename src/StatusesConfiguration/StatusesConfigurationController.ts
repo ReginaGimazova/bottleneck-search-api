@@ -32,6 +32,21 @@ export class StatusesConfigurationController {
       }
     })
   }
+
+  public addStatus(req: Request, res: Response) {
+    const configurationDataStore = new StatusesConfigurationDataStore();
+    const {value, status, type} = req.body;
+
+    configurationDataStore.addStatus({value, status, type}, (data, err) => {
+      if (err){
+        res.status(404).send({
+          message: err.message || 'Error'
+        })
+      } else {
+        this.getAll(req, res);
+      }
+    })
+  }
 }
 
 export const configurationController = new StatusesConfigurationController();
