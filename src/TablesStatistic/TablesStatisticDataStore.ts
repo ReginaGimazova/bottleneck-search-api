@@ -74,14 +74,12 @@ class TablesStatisticDataStore {
     try {
       connection.query('SET FOREIGN_KEY_CHECKS = 0;');
 
-      await promisifyQuery(
-        `insert into master.queries_to_tables (query_id, table_id) VALUES ${insertQuery}`
-      );
+      await promisifyQuery(`insert into master.queries_to_tables (query_id, table_id) VALUES ${insertQuery}`)
+
       connection.query('SET FOREIGN_KEY_CHECKS = 0;');
 
       if (isThroughFinalQuery) {
-        analyzeProgress.updateProgress(100);
-
+        analyzeProgress.tablesInserted();
         console.log('Table - queries relations successfully saved.');
       }
     } catch (queryTableError) {

@@ -32,7 +32,7 @@ class OriginalQueryDataStore {
           logger.logError(err + ' Query Log importing error ');
           connection.rollback();
         } else if (result) {
-          analyzeProgress.updateProgress(20);
+          analyzeProgress.queryLogInserted();
           filteredQueryDataStore.save(connection);
         }
       });

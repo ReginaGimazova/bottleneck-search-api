@@ -68,7 +68,7 @@ class FilteredQueryDataStore {
         const correctTuples = tuples.filter(t => t);
 
         if (!(correctTuples.find(t => !t.parametrized_query_id))) {
-          analyzeProgress.updateProgress(40);
+          analyzeProgress.parametrizedQueriesInserted();
           callback(correctTuples);
         }
       } catch (error) {
@@ -145,7 +145,9 @@ class FilteredQueryDataStore {
 
             try {
               await promisifyQuery(insertQuery);
-              analyzeProgress.updateProgress(60);
+              analyzeProgress.filteredQueriesInserted();
+              console.log('Filtered queries successfully saved.');
+
               connection.query('SET FOREIGN_KEY_CHECKS = 1;');
             } catch (insertError) {
               logger.logError(insertError);

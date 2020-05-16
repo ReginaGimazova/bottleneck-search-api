@@ -16,6 +16,9 @@ class StatusesConfigurationRoutes {
     this.router.post('/', (req: express.Request, res: express.Response) =>
       configurationController.save(req, res)
     );
+
+    this.router.post('/new', (req: express.Request, res: express.Response) =>
+    configurationController.addStatus(req,res))
   }
 }
 

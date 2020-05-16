@@ -63,20 +63,23 @@ class ParametrizedQueriesDataStore {
     const groupBySqlAndHostQueryString =
       'select id, parsed_query, query_count from master.parametrized_queries order by query_count desc;';
 
-    const groupBySqlWithTables =
-      `select parametrized_queries.id, parsed_query, query_count from 
-       ( select id from tables_statistic where table_name in (${tablesToString})) as tables
-       inner join queries_to_tables on table_id = tables.id
-       inner join filtered_queries on queries_to_tables.query_id = filtered_queries.id
-       inner join parametrized_queries on filtered_queries.parametrized_query_id = parametrized_queries.id 
-       group by parsed_query_hash order by sum(query_count) desc;`;
+    const groupBySqlWithTables = `
+       select parametrized_queries.id, parsed_query, count(parametrized_queries.id) as query_count
+       from master.parametrized_queries
+       inner join filtered_queries fq on parametrized_queries.id = fq.parametrized_query_id
+       inner join queries_to_tables qtt on fq.id = qtt.query_id
+       inner join tables_statistic ts on qtt.table_id = ts.id and table_name in (${tablesToString})
+       group by  parsed_query_hash
+       order by query_count desc;
+    `;
 
-    const groupBySqlAndHostWithTables =
-      `select parametrized_queries.id, parsed_query, query_count from 
+    const groupBySqlAndHostWithTables = `
+       select parametrized_queries.id, parsed_query, count(parametrized_queries.id) as query_count from 
        ( select id from tables_statistic where table_name in (${tablesToString})) as tables 
        inner join queries_to_tables on table_id = tables.id 
        inner join filtered_queries on queries_to_tables.query_id = filtered_queries.id 
-       inner join parametrized_queries on filtered_queries.parametrized_query_id = parametrized_queries.id 
+       inner join parametrized_queries on filtered_queries.parametrized_query_id = parametrized_queries.id
+       group by  parsed_query_hash, parametrized_queries.user_host
        order by query_count desc;`;
 
     const dbConnection = new DBConnection();
