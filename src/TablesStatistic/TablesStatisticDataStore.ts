@@ -79,7 +79,7 @@ class TablesStatisticDataStore {
             logger.logError(error)
             connection.rollback()
           } else {
-            analyzeProgress.updateProgress(100);
+            analyzeProgress.tablesInserted();
 
             console.log('Table - queries relations successfully saved.');
           }
