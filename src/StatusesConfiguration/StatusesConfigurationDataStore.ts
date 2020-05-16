@@ -6,7 +6,7 @@ import Logger from '../helpers/Logger';
 class StatusesConfigurationDataStore {
   save(statusesId = [], callback){
     const dbConnection = new DBConnection();
-    const connection = dbConnection.create();
+    const connection = dbConnection.createToolConnection();
     const logger = new Logger();
 
     const idsToString =
@@ -27,7 +27,7 @@ class StatusesConfigurationDataStore {
 
   getAll(callback) {
     const dbConnection = new DBConnection();
-    const connection = dbConnection.create();
+    const connection = dbConnection.createToolConnection();
     const logger = new Logger();
 
     connection.query('select id, value, type, status from master.statuses_configuration;', (err: MysqlError, result: any) => {

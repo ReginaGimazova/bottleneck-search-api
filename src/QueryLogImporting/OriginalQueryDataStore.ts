@@ -7,7 +7,6 @@ import DBConnection from '../DatabaseAccess/DBConnection';
 import Logger from '../helpers/Logger';
 import FilteredQueryDataStore from '../FilteredQueries/FilteredQueryDataStore';
 import {analyzeProgress} from "../AnalyzeProgress/AnalyzeProgress";
-import {connectionConfig} from "../DatabaseAccess/ConnectionConfig";
 
 const { LOG_PATH } = process.env;
 const sql = fs.readFileSync(LOG_PATH).toString();
@@ -15,7 +14,7 @@ const sql = fs.readFileSync(LOG_PATH).toString();
 class OriginalQueryDataStore {
   save(): void {
     const dbConnection = new DBConnection();
-    const connection = dbConnection.create(connectionConfig);
+    const connection = dbConnection.createToolConnection();
     const logger = new Logger();
 
     const filteredQueryDataStore = new FilteredQueryDataStore();

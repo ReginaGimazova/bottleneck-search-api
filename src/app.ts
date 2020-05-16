@@ -10,6 +10,7 @@ import {tableStatisticRoutes} from "./TablesStatistic/TableStatisticRoutes";
 import {parametrizedQueriesRoutes} from './QueriesParametrizing/ParametrizedQueriesRoutes';
 import {initialRoutes} from "./Initial/InitialRoutes";
 import {analyzeProgressRoute} from './AnalyzeProgress/AnalyzeProgressRoute';
+import {explainQueriesRoutes} from './ExplainQueries/ExplainQueriesRoutes';
 
 class App {
   public app: express.Application;
@@ -34,11 +35,12 @@ class App {
     this.app.use(helmet());
     this.app.use(cors());
 
+    this.app.use('/start', initialRoutes);
+    this.app.use('/progress', analyzeProgressRoute);
     this.app.use('/configuration', configurationRoutes);
     this.app.use('/tables', tableStatisticRoutes);
     this.app.use('/queries', parametrizedQueriesRoutes);
-    this.app.use('/start', initialRoutes);
-    this.app.use('/progress', analyzeProgressRoute);
+    this.app.use('/explain', explainQueriesRoutes);
   }
 }
 

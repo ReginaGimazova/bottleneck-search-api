@@ -1,8 +1,9 @@
 import { promisify } from 'util';
+import { MysqlError } from 'mysql';
+
 import Logger from '../helpers/Logger';
 import { analyzeProgress } from '../AnalyzeProgress/AnalyzeProgress';
 import DBConnection from "../DatabaseAccess/DBConnection";
-import {prodConnectionConfig} from "../DatabaseAccess/ConnectionConfig";
 
 class ExplainQueriesDataStore {
   private convertQueriesToTuple(queries) {
@@ -19,7 +20,7 @@ class ExplainQueriesDataStore {
 
   private prodDbConnection(){
     const prodConnection = new DBConnection();
-    return prodConnection.create(prodConnectionConfig)
+    return prodConnection.createProdConnection();
   }
 
   private analyzeQueries({ tuples, callback }) {
@@ -72,7 +73,53 @@ class ExplainQueriesDataStore {
     });
   }
 
-  public getExplainInfo(){
+  public getExplainInfo(tables, callback){
+    const tablesToString =
+      tables.length > 0 ? tables.map(table => `"${table}"`).join(', ') : '';
+
+    const explainResult = `
+      select value as critical_statuses, parametrized_queries.query_count, parametrized_queries.parsed_query
+      from master.statuses_configuration
+      inner join explain_replay_info as explain_info on 
+        JSON_UNQUOTE(JSON_EXTRACT(explain_info.explain_result, '$.Extra')) = value
+      inner join filtered_queries on explain_info.query_id = filtered_queries.id
+      inner join parametrized_queries on filtered_queries.parametrized_query_id = parametrized_queries.id
+      where status = true and type = 'EXPLAIN';
+    `;
+
+    const explainResultWithTables = `
+      select value as critical_statuses, parametrized_queries.query_count, parametrized_queries.parsed_query
+      from master.statuses_configuration
+      inner join explain_replay_info as explain_info on 
+        JSON_UNQUOTE(JSON_EXTRACT(explain_info.explain_result, '$.Extra')) = value
+      inner join filtered_queries on explain_info.query_id = filtered_queries.id
+      inner join queries_to_tables on filtered_queries.id = queries_to_tables.query_id
+      inner join tables_statistic on queries_to_tables.table_id = tables_statistic.id and table_name in (${tablesToString})
+      inner join parametrized_queries on filtered_queries.parametrized_query_id = parametrized_queries.id
+      where status = true and type = 'EXPLAIN';
+    `;
+
+    let query = explainResult;
+
+    const dbConnection = new DBConnection();
+    const connection = dbConnection.createToolConnection();
+    const logger = new Logger();
+
+    if (tables.length > 0){
+      query = explainResultWithTables;
+    }
+
+    connection.query(query, (err: MysqlError, result: any) => {
+      if (result) {
+        callback(result, undefined);
+      }
+      if (err) {
+        logger.logError(err);
+        callback(undefined, err);
+      }
+    });
+
+    connection.end();
 
   }
 }

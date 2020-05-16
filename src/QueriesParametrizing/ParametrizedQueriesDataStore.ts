@@ -6,7 +6,6 @@ import RejectedQueryDataStore from '../RejectedQueriesSaving/RejectedQueryDataSt
 import queryParametrizer from './queryParametrizer';
 import Logger from '../helpers/Logger';
 import DBConnection from '../DatabaseAccess/DBConnection';
-import {connectionConfig} from "../DatabaseAccess/ConnectionConfig";
 
 class ParametrizedQueriesDataStore {
   private static parametrizeQuery({ argument, connection }) {
@@ -81,7 +80,7 @@ class ParametrizedQueriesDataStore {
        order by query_count desc;`;
 
     const dbConnection = new DBConnection();
-    const connection = dbConnection.create(connectionConfig);
+    const connection = dbConnection.createToolConnection();
     const logger = new Logger();
 
     let queryString = groupBySqlQueryString;

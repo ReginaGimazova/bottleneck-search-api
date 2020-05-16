@@ -6,7 +6,6 @@ import usedTablesReceiver from './UsedTablesReceiver';
 import Logger from '../helpers/Logger';
 import DBConnection from '../DatabaseAccess/DBConnection';
 import { analyzeProgress } from '../AnalyzeProgress/AnalyzeProgress';
-import {connectionConfig} from "../DatabaseAccess/ConnectionConfig";
 
 class TablesStatisticDataStore {
   private createQueriesTuple(queriesArray) {
@@ -170,7 +169,7 @@ class TablesStatisticDataStore {
 
   getAll(callback) {
     const dbConnection = new DBConnection();
-    const connection = dbConnection.create(connectionConfig);
+    const connection = dbConnection.createToolConnection();
     const logger = new Logger();
 
     connection.query(

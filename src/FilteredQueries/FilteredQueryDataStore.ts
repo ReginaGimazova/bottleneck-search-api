@@ -7,7 +7,6 @@ import DBConnection from '../DatabaseAccess/DBConnection';
 import Logger from '../helpers/Logger';
 import {analyzeProgress} from "../AnalyzeProgress/AnalyzeProgress";
 import ExplainQueriesDataStore from "../ExplainQueries/ExplainQueriesDataStore";
-import {connectionConfig} from "../DatabaseAccess/ConnectionConfig";
 
 class FilteredQueryDataStore {
   /**
@@ -178,7 +177,7 @@ class FilteredQueryDataStore {
     const queries = [];
 
     const dbConnection = new DBConnection();
-    const connection = dbConnection.create(connectionConfig);
+    const connection = dbConnection.createToolConnection();
     const logger = new Logger();
 
     connection.query(
