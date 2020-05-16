@@ -27,7 +27,7 @@ class StatusesConfigurationDataStore {
 
   addStatus(newStatusData, callback){
     const dbConnection = new DBConnection();
-    const connection = dbConnection.create();
+    const connection = dbConnection.createToolConnection();
     const logger = new Logger();
 
     const {status, value, type} = newStatusData;

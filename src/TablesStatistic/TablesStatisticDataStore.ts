@@ -8,6 +8,10 @@ import DBConnection from '../DatabaseAccess/DBConnection';
 import { analyzeProgress } from '../AnalyzeProgress/AnalyzeProgress';
 
 class TablesStatisticDataStore {
+  /**
+   *
+   * @param queriesArray
+   */
   private createQueriesTuple(queriesArray) {
     return queriesArray.map(item => {
       return {
@@ -61,6 +65,12 @@ class TablesStatisticDataStore {
     return tables;
   }
 
+  /**
+   *
+   * @param connection
+   * @param tuple
+   * @param isThroughFinalQuery
+   */
   private async saveQueryToTablesRelation({
     connection,
     tuple,
@@ -74,7 +84,9 @@ class TablesStatisticDataStore {
     try {
       connection.query('SET FOREIGN_KEY_CHECKS = 0;');
 
-      await promisifyQuery(`insert into master.queries_to_tables (query_id, table_id) VALUES ${insertQuery}`)
+      await promisifyQuery(
+        `insert into master.queries_to_tables (query_id, table_id) VALUES ${insertQuery}`
+      );
 
       connection.query('SET FOREIGN_KEY_CHECKS = 0;');
 
@@ -133,36 +145,27 @@ class TablesStatisticDataStore {
     });
   };
 
-  async save(connection) {
-    const logger = new Logger();
+  async save({ connection, queries }) {
+    if (!queries.length) {
+      return;
+    }
 
-    this.getAllFilteredQueries(connection)
-      .then(queries => {
-        if (!queries.length) {
-          return;
-        }
+    const tuples = this.createQueriesTuple(queries);
 
-        const tuples = this.createQueriesTuple(queries);
+    queries.forEach((query, index) => {
+      const { query_text } = query;
+      tuples[index].tables = countBy(
+        this.parseTablesFromQuery({
+          query_text,
+          connection,
+        })
+      );
+    });
 
-        queries.forEach((query, index) => {
-          const { query_text } = query;
-          tuples[index].tables = countBy(
-            this.parseTablesFromQuery({
-              query_text,
-              connection,
-            })
-          );
-        });
-
-        tuples.forEach((tuple, index) => {
-          const isThroughFinalQuery = index === tuples.length - 1;
-          this.insertTables({ tuple, connection, isThroughFinalQuery });
-        });
-      })
-      .catch(error => {
-        logger.logError(error.message);
-        connection.rollback();
-      });
+    tuples.forEach((tuple, index) => {
+      const isThroughFinalQuery = index === tuples.length - 1;
+      this.insertTables({ tuple, connection, isThroughFinalQuery });
+    });
   }
 
   getAll(callback) {

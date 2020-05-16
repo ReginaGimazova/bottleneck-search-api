@@ -156,7 +156,7 @@ class FilteredQueryDataStore {
 
             try{
               const filteredQueries = await this.getAllFilteredQueries(connection);
-              await tablesStatisticDataStore.save(connection);
+              await tablesStatisticDataStore.save({connection, queries: filteredQueries});
               await explainQueriesDataStore.save({connection, queries: filteredQueries});
             } catch (e) {
               logger.logError(e);
