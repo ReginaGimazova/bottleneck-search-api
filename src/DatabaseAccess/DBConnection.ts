@@ -12,11 +12,24 @@ const connectionConfig = {
   database: DB_DATABASE
 }
 
+const prodConnectionConfig = {
+  host: 'localhost',
+  user: 'root',
+  password: '34Zc18WfLn',
+  database: 'test'
+}
+
 class DBConnection {
-  create() : Connection {
+  createProdConnection() : Connection {
     return createConnection({
-      ...connectionConfig,
+      ...prodConnectionConfig,
     });
+  }
+
+  createToolConnection() : Connection {
+    return createConnection({
+      ...connectionConfig
+    })
   }
 }
 

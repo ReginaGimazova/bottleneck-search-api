@@ -83,7 +83,7 @@ class ParametrizedQueriesDataStore {
        order by query_count desc;`;
 
     const dbConnection = new DBConnection();
-    const connection = dbConnection.create();
+    const connection = dbConnection.createToolConnection();
     const logger = new Logger();
 
     let queryString = groupBySqlQueryString;

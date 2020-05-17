@@ -11,7 +11,14 @@ class AnalyzeProgressRoute {
   private config(): void {
     this.router.get('/', (req: express.Request, res: express.Response) => {
       const process = analyzeProgress.progress;
-      res.status(200).send(`${process}`);
+      if (process){
+        res.status(200).send(`${process}`);
+      }
+      else {
+        res.status(500).send({
+          message: 'Server error.',
+        });
+      }
     });
   }
 }

@@ -5,9 +5,13 @@ import RejectedQueryDataStore from '../RejectedQueriesSaving/RejectedQueryDataSt
 import usedTablesReceiver from './UsedTablesReceiver';
 import Logger from '../helpers/Logger';
 import DBConnection from '../DatabaseAccess/DBConnection';
-import {analyzeProgress} from "../AnalyzeProgress/AnalyzeProgress";
+import { analyzeProgress } from '../AnalyzeProgress/AnalyzeProgress';
 
 class TablesStatisticDataStore {
+  /**
+   *
+   * @param queriesArray
+   */
   private createQueriesTuple(queriesArray) {
     return queriesArray.map(item => {
       return {
@@ -20,28 +24,25 @@ class TablesStatisticDataStore {
 
   /**
    *
-   * @param table_ids
-   * @param query_id
+   * @param tuples
    *
    * This function takes tuple as argument and returns ready for insert query string
    * table_ids, query_id - tuple fields
    */
-  private convertTupleToQueryString({ table_ids, query_id }) {
-    return [...table_ids].map(tableId => {
-      return `('${query_id}', '${tableId}')`;
-    });
+
+  private convertTupleToQueryString(tuples) {
+    return tuples.map(({table_ids, query_id}) =>
+      [...table_ids]
+        .map(tableId => `('${query_id}', '${tableId}')`)
+        .join(', ')
+    )
   }
 
   /**
    *
+   * @param query_text
    * @param connection
-   *
    */
-  private getAllFilteredQueries(connection) {
-    const promisifyQuery = promisify(connection.query).bind(connection);
-    return promisifyQuery('select id, query_text from master.filtered_queries');
-  }
-
   private parseTablesFromQuery({ query_text, connection }) {
     const rejectedQueryDataStore = new RejectedQueryDataStore();
 
@@ -61,32 +62,29 @@ class TablesStatisticDataStore {
     return tables;
   }
 
+  /**
+   *
+   * @param connection
+   * @param tuples
+   */
   private async saveQueryToTablesRelation({
     connection,
-    tuple,
-    isThroughFinalQuery,
+    tuples,
   }) {
     const promisifyQuery = promisify(connection.query).bind(connection);
     const logger = new Logger();
 
-    const insertQuery = this.convertTupleToQueryString(tuple).join(', ');
+    const insertQuery = this.convertTupleToQueryString(tuples).join(', ');
 
     try {
-      await promisifyQuery(`insert into master.queries_to_tables (query_id, table_id) VALUES ${insertQuery}`)
-      if (isThroughFinalQuery) {
-        connection.commit(error => {
-          if (error){
-            logger.logError(error)
-            connection.rollback()
-          } else {
-            analyzeProgress.tablesInserted();
+      connection.query('SET FOREIGN_KEY_CHECKS = 0;');
 
-            console.log('Table - queries relations successfully saved.');
-          }
-          connection.end();
+      await promisifyQuery(
+        `insert into master.queries_to_tables (query_id, table_id) VALUES ${insertQuery}`
+      );
 
-        });
-      }
+      connection.query('SET FOREIGN_KEY_CHECKS = 0;');
+
     } catch (queryTableError) {
       logger.logError(queryTableError);
       connection.rollback();
@@ -98,24 +96,20 @@ class TablesStatisticDataStore {
    * @param table
    * @param connection
    */
-  private insertTables = ({ tuple, connection, isThroughFinalQuery }) => {
+  private insertTablesSeparately = ({
+    tuple,
+    connection,
+    isThroughFinalQuery,
+    callbackTuple,
+  }) => {
     const promisifyQuery = promisify(connection.query).bind(connection);
     const logger = new Logger();
 
     const { tables, table_ids } = tuple;
     const tableNames = Object.keys(tables);
 
-    if (isThroughFinalQuery && !Object.entries(tables).length){
-      connection.commit((error) => {
-        if (error){
-          logger.logError(error)
-          connection.rollback()
-        } else {
-          console.log('Success.');
-        }
-
-        connection.end();
-      });
+    if (isThroughFinalQuery && !Object.entries(tables).length) {
+      analyzeProgress.tablesInserted();
     }
 
     tableNames.forEach(async (name, index) => {
@@ -131,14 +125,8 @@ class TablesStatisticDataStore {
         const { insertId } = await promisifyQuery(insertQueryString);
         table_ids.add(insertId);
 
-        if (index === (tableNames.length - 1)) {
-          analyzeProgress.updateProgress(80);
-
-          await this.saveQueryToTablesRelation({
-            connection,
-            tuple,
-            isThroughFinalQuery,
-          });
+        if (index === tableNames.length - 1) {
+          callbackTuple(tuple);
         }
       } catch (insertTableError) {
         logger.logError(insertTableError);
@@ -147,41 +135,50 @@ class TablesStatisticDataStore {
     });
   };
 
-  async save(connection) {
-    const logger = new Logger();
+  /**
+   *
+   * @param connection
+   * @param queries
+   * @param callback
+   */
+  save({ connection, queries, callback }) {
+    const tuples = this.createQueriesTuple(queries);
 
-    this.getAllFilteredQueries(connection)
-      .then(queries => {
-        if (!queries.length) {
-          return;
-        }
+    queries.forEach((query, index) => {
+      const { query_text } = query;
+      tuples[index].tables = countBy(
+        this.parseTablesFromQuery({
+          query_text,
+          connection,
+        })
+      );
+    });
 
-        const tuples = this.createQueriesTuple(queries);
+    tuples.forEach((tuple, index) => {
+      const isThroughFinalQuery = index === tuples.length - 1;
 
-        queries.forEach((query, index) => {
-          const { query_text } = query;
-          tuples[index].tables = countBy(
-            this.parseTablesFromQuery({
-              query_text,
-              connection,
-            })
-          );
-        });
-
-        tuples.forEach((tuple, index) => {
-          const isThroughFinalQuery = index === (tuples.length - 1);
-          this.insertTables({ tuple, connection, isThroughFinalQuery });
-        });
-      })
-      .catch(error => {
-        logger.logError(error.message);
-        connection.rollback();
+      this.insertTablesSeparately({
+        tuple,
+        connection,
+        isThroughFinalQuery,
+        callbackTuple: async updatedTuple => {
+          tuples[index] = updatedTuple;
+          if (isThroughFinalQuery){
+            await this.saveQueryToTablesRelation({connection, tuples});
+            callback(true)
+          }
+        },
       });
+    });
   }
 
+  /**
+   *
+   * @param callback
+   */
   getAll(callback) {
     const dbConnection = new DBConnection();
-    const connection = dbConnection.create();
+    const connection = dbConnection.createToolConnection();
     const logger = new Logger();
 
     connection.query(
