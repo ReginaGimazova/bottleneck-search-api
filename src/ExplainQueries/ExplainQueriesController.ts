@@ -9,7 +9,7 @@ export class ExplainQueriesController {
     explainQueriesDataStore.getExplainInfo([],(data, err) => {
       if (err)
         res.status(500).send({
-          message: err.message || "Server error occurred while retrieving suitable route."
+          message: err.message || "Server error occurred while retrieving explain info."
         });
       else res.status(200).send(data);
     });

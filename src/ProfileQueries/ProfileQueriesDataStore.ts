@@ -3,13 +3,9 @@ import { MysqlError } from 'mysql';
 
 import Logger from '../helpers/Logger';
 import { analyzeProgress } from '../AnalyzeProgress/AnalyzeProgress';
-import DBConnection from '../DatabaseAccess/DBConnection';
+import DBConnection from "../DatabaseAccess/DBConnection";
 
-class ExplainQueriesDataStore {
-  /**
-   *
-   * @param queries
-   */
+class ProfileQueriesDataStore {
   protected convertQueriesToTuple(queries) {
     return queries.map(({ id, query_text }) => {
       return {
@@ -20,30 +16,32 @@ class ExplainQueriesDataStore {
     });
   }
 
-  /**
-   *
-   * @param tuples
-   */
   protected prepareInsertValues = tuples =>
-    tuples.map(({ id, result }) => [`${id}`, `${result}`]);
+    tuples
+      .map(({ id, result }) =>
+        result
+          .map(({Status, Duration}) => `('${id}', '${Status}', '${Duration}')`)
+          .join(', ')
+      )
+      .join(', ')
 
-  /**
-   *
-   * @param tuples
-   * @param prodConnection
-   * @param callback
-   */
-  private analyzeQueries({ tuples, prodConnection, callback }) {
+  private analyzeQueries({ tuples, callback, prodConnection }) {
     const logger = new Logger();
-
     const promisifyQuery = promisify(prodConnection.query).bind(prodConnection);
 
     tuples.forEach(async ({ query_text }, index) => {
-      const queryString = `explain ${query_text};`;
+      try {
+        await promisifyQuery(query_text);
+      } catch (e) {
+        prodConnection.rollback();
+        logger.logError(e.message);
+      }
 
       try {
-        const analyzeResult = await promisifyQuery(queryString);
-        tuples[index].result = JSON.stringify(analyzeResult[0]);
+        const analyzeResult = await promisifyQuery('show profile;');
+        console.log(analyzeResult);
+
+        tuples[index].result = analyzeResult;
 
         if (index === tuples.length - 1) {
           callback(tuples);
@@ -55,31 +53,33 @@ class ExplainQueriesDataStore {
     });
   }
 
-  /**
-   *
-   * @param connection
-   * @param queries
-   * @param prodConnection
-   * @param callback
-   */
-  public save({ connection, queries, prodConnection, callback }) {
+  public async save({ connection, queries, prodConnection, callback }) {
     const logger = new Logger();
     const tuples = this.convertQueriesToTuple(queries);
 
     const promisifyQuery = promisify(connection.query).bind(connection);
+    const promisifyProdQuery = promisify(prodConnection.query).bind(
+      prodConnection
+    );
+
+    await promisifyProdQuery('set profiling = 1;');
 
     this.analyzeQueries({
       tuples,
       prodConnection,
-      callback: updatedTuples => {
+      callback: async updatedTuples => {
         const values = this.prepareInsertValues(updatedTuples);
-        const queryString = `insert into master.explain_replay_info
-          (query_id, explain_result) values ?`;
 
-        promisifyQuery(queryString, [values])
-          .then(result => {
-            analyzeProgress.explainResultInserted();
+        console.log(values)
+        const queryString = `insert into master.profile_replay_info
+          (query_id, status, duration) values ${values}`;
+
+        await promisifyProdQuery('set profiling = 0;');
+
+        promisifyQuery(queryString)
+          .then(() => {
             callback(true);
+            analyzeProgress.profileResultInserted();
           })
           .catch(insertError => {
             logger.logError(insertError.message);
@@ -89,12 +89,7 @@ class ExplainQueriesDataStore {
     });
   }
 
-  /**
-   *
-   * @param tables
-   * @param callback
-   */
-  public getExplainInfo(tables, callback) {
+  public getProfileInfo(tables, callback){
     const dbConnection = new DBConnection();
     const connection = dbConnection.createToolConnection();
     const logger = new Logger();
@@ -102,39 +97,41 @@ class ExplainQueriesDataStore {
     const searchTables =
       tables.length > 0 ? tables.map(table => `"${table}"`).join(', ') : '';
 
-    const explainResult = `
-      select explain_info as critical_statuses, parametrized_queries.query_count, parametrized_queries.parsed_query
-      from (
-        select
-          query_id,
-          json_unquote(json_extract(explain_result, '$.Extra')) explain_info
-        from explain_replay_info)
-        as replay_info
-        inner join statuses_configuration on statuses_configuration.value = explain_info
+    const profileResult = `
+      select replay_info.status as critical_statuses, duration, parametrized_queries.query_count, parametrized_queries.parsed_query
+        from (
+          select
+            query_id,
+            status,
+            duration
+          from profile_replay_info)
+          as replay_info
+        inner join statuses_configuration on statuses_configuration.value = replay_info.status
         inner join filtered_queries on query_id = filtered_queries.id
         inner join parametrized_queries on filtered_queries.parametrized_query_id = parametrized_queries.id
-      where status = true and type = 'EXPLAIN';
+      where statuses_configuration.status = true and type = 'PROFILE';
     `;
 
-    const explainResultWithTables = `
-      select explain_info as critical_statuses, parametrized_queries.query_count, parametrized_queries.parsed_query
-      from (
-        select
-          query_id,
-          json_unquote(json_extract(explain_result, '$.Extra')) explain_info
-        from explain_replay_info)
-        as replay_info
-        inner join statuses_configuration on statuses_configuration.value = explain_info
+    const profileResultWithTables = `
+      select replay_info.status as critical_statuses, duration, parametrized_queries.query_count, parametrized_queries.parsed_query
+        from (
+          select
+            query_id,
+            status,
+            duration
+          from profile_replay_info)
+          as replay_info
+        inner join statuses_configuration on statuses_configuration.value = replay_info.status
         inner join filtered_queries on query_id = filtered_queries.id
         inner join queries_to_tables on filtered_queries.id = queries_to_tables.query_id
         inner join tables_statistic on queries_to_tables.table_id = tables_statistic.id and table_name in (${searchTables})
         inner join parametrized_queries on filtered_queries.parametrized_query_id = parametrized_queries.id
-      where status = true and type = 'EXPLAIN';
-    `;
+      where statuses_configuration.status = true and type = 'PROFILE';
+    `
 
-    let query = explainResult;
+    let query = profileResult;
     if (tables.length > 0) {
-      query = explainResultWithTables;
+      query = profileResultWithTables;
     }
 
     connection.query(query, (err: MysqlError, result: any) => {
@@ -151,4 +148,4 @@ class ExplainQueriesDataStore {
   }
 }
 
-export default ExplainQueriesDataStore;
+export default ProfileQueriesDataStore;

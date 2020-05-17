@@ -5,10 +5,16 @@ import TablesStatisticDataStore from '../TablesStatistic/TablesStatisticDataStor
 import ParametrizedQueriesDataStore from '../QueriesParametrizing/ParametrizedQueriesDataStore';
 import DBConnection from '../DatabaseAccess/DBConnection';
 import Logger from '../helpers/Logger';
-import {analyzeProgress} from "../AnalyzeProgress/AnalyzeProgress";
-import ExplainQueriesDataStore from "../ExplainQueries/ExplainQueriesDataStore";
+import { analyzeProgress } from '../AnalyzeProgress/AnalyzeProgress';
+import ExplainQueriesDataStore from '../ExplainQueries/ExplainQueriesDataStore';
+import ProfileQueriesDataStore from '../ProfileQueries/ProfileQueriesDataStore';
 
 class FilteredQueryDataStore {
+  protected prodDbConnection() {
+    const prodConnection = new DBConnection();
+    return prodConnection.createProdConnection();
+  }
+
   /**
    *
    * This function takes tuple as argument and returns ready for insert query string
@@ -16,7 +22,8 @@ class FilteredQueryDataStore {
    */
   private convertTupleToQueryString = tuples => {
     const queriesArray = tuples.map(
-      ({ user_host, argument, parametrized_query_id }) =>`('${user_host}', '${argument}', ${parametrized_query_id})`
+      ({ user_host, argument, parametrized_query_id }) =>
+        `('${user_host}', '${argument}', ${parametrized_query_id})`
     );
 
     return queriesArray.join(', ');
@@ -67,7 +74,7 @@ class FilteredQueryDataStore {
 
         const correctTuples = tuples.filter(t => t);
 
-        if (!(correctTuples.find(t => !t.parametrized_query_id))) {
+        if (!correctTuples.find(t => !t.parametrized_query_id)) {
           analyzeProgress.parametrizedQueriesInserted();
           callback(correctTuples);
         }
@@ -86,8 +93,7 @@ class FilteredQueryDataStore {
    * Callback from save method returns received original queries that have already passed through the filter
    */
   private retrieveOriginalQueriesAccordingToFilter({ promisifyQuery, logger }) {
-
-    return promisifyQuery (
+    return promisifyQuery(
       'select user_host, argument from master.original_queries ' +
         'where not exists ( ' +
         'select 1 from master.filter ' +
@@ -112,63 +118,116 @@ class FilteredQueryDataStore {
     return promisifyQuery('select id, query_text from master.filtered_queries');
   }
 
+  private async nextAnalyzeProcess({ connection, filteredQueries }) {
+    const tablesStatisticDataStore = new TablesStatisticDataStore();
+    const explainQueriesDataStore = new ExplainQueriesDataStore();
+    const profileQueriesDataStore = new ProfileQueriesDataStore();
+
+    const prodConnection = this.prodDbConnection();
+
+    const readyToCommit = {
+      tables: false,
+      explain: false,
+      profile: false,
+    };
+
+    const checkAllData = () => {
+      if (Object.values(readyToCommit).every(item => item)) {
+        connection.commit();
+        prodConnection.end();
+        connection.end();
+      }
+    };
+
+    await tablesStatisticDataStore.save({
+      connection,
+      queries: filteredQueries,
+      callback: tablesInserted => {
+        readyToCommit.tables = tablesInserted;
+        checkAllData();
+      },
+    });
+
+    explainQueriesDataStore.save({
+      connection,
+      queries: filteredQueries,
+      prodConnection,
+      callback: explainInserted => {
+        readyToCommit.explain = explainInserted;
+        checkAllData();
+      },
+    });
+
+    await profileQueriesDataStore.save({
+      connection,
+      queries: filteredQueries,
+      prodConnection,
+      callback: profileInserted => {
+        readyToCommit.profile = profileInserted;
+        checkAllData();
+      },
+    });
+  }
   /**
    *
    * @param connection
    *
    * Insert filtered queries and call saving tables
    */
-  save(connection) {
+  async save(connection) {
     const logger = new Logger();
     const promisifyQuery = promisify(connection.query).bind(connection);
 
-    const tablesStatisticDataStore = new TablesStatisticDataStore();
-    const explainQueriesDataStore = new ExplainQueriesDataStore();
-
-    this.retrieveOriginalQueriesAccordingToFilter({
-      promisifyQuery,
-      logger,
-    })
-      .then(async queries => {
-        if (!queries.length) {
-          return;
-        }
-        this.getParametrizedQueries({
-          connection,
-          queries,
-          callback: async tuples => {
-            const values = this.convertTupleToQueryString(tuples);
-
-            connection.query('SET FOREIGN_KEY_CHECKS = 0;');
-
-            const insertQuery = `insert into master.filtered_queries (user_host, query_text, parametrized_query_id) values ${values}`;
-
-            try {
-              await promisifyQuery(insertQuery);
-              analyzeProgress.filteredQueriesInserted();
-              console.log('Filtered queries successfully saved.');
-
-              connection.query('SET FOREIGN_KEY_CHECKS = 1;');
-            } catch (insertError) {
-              logger.logError(insertError);
-              connection.rollback();
-            }
-
-            try{
-              const filteredQueries = await this.getAllFilteredQueries(connection);
-              await tablesStatisticDataStore.save({connection, queries: filteredQueries});
-              await explainQueriesDataStore.save({connection, queries: filteredQueries});
-            } catch (e) {
-              logger.logError(e);
-              connection.rollback();
-            }
-          },
-        });
-      })
-      .catch(queriesError => {
-        connection.rollback();
-        logger.logError(queriesError);
+    try {
+      const queries = await this.retrieveOriginalQueriesAccordingToFilter({
+        promisifyQuery,
+        logger,
       });
+      if (!queries.length) {
+        return;
+      }
+      this.getParametrizedQueries({
+        connection,
+        queries,
+        callback: async tuples => {
+          const values = this.convertTupleToQueryString(tuples);
+
+          connection.query('SET FOREIGN_KEY_CHECKS = 0;');
+
+          const insertQuery = `
+            insert into master.filtered_queries (user_host, query_text, parametrized_query_id) values ${values}`;
+
+          try {
+            await promisifyQuery(insertQuery);
+            analyzeProgress.filteredQueriesInserted();
+            connection.query('SET FOREIGN_KEY_CHECKS = 1;');
+
+          } catch (insertError) {
+            logger.logError(insertError);
+            connection.rollback();
+          }
+
+          try {
+            const filteredQueries = await this.getAllFilteredQueries(
+              connection
+            );
+            if (!filteredQueries.length) {
+              throw new Error(
+                'Filtered queries table does not include any data'
+              );
+            }
+
+            await this.nextAnalyzeProcess({ connection, filteredQueries });
+          } catch (e) {
+            logger.logError(e);
+            connection.rollback();
+          }
+        },
+      });
+    } catch (queriesError) {
+      connection.rollback();
+      logger.logError(queriesError);
+    }
   }
 
   /**

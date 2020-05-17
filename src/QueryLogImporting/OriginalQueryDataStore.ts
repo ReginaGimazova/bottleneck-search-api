@@ -27,13 +27,13 @@ class OriginalQueryDataStore {
         throw error;
       }
 
-      connection.query(queryToSave, (err, result) => {
+      connection.query(queryToSave, async (err, result) => {
         if (err) {
           logger.logError(err + ' Query Log importing error ');
           connection.rollback();
         } else if (result) {
           analyzeProgress.queryLogInserted();
-          filteredQueryDataStore.save(connection);
+          await filteredQueryDataStore.save(connection);
         }
       });
     });

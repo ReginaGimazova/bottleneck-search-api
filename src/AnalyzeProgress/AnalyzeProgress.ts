@@ -6,22 +6,26 @@ class AnalyzeProgress {
   }
 
   queryLogInserted(){
-    this.updateProgress(20)
+    this.updateProgress(100 / 6)
   }
 
   parametrizedQueriesInserted(){
-    this.updateProgress(40)
+    this.updateProgress(100 / 6 * 2)
   }
 
   filteredQueriesInserted(){
-    this.updateProgress(60)
+    this.updateProgress(100 / 6 * 3)
   }
 
   tablesInserted(){
-    this.updateProgress(100)
+    this.updateProgress(100 / 6 * 4)
   }
 
   explainResultInserted(){
+    this.updateProgress(100 / 6 * 5)
+  }
+
+  profileResultInserted(){
     this.updateProgress(100)
   }
 }
