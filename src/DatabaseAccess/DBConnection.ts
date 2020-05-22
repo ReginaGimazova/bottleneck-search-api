@@ -1,35 +1,44 @@
-import {Connection, createConnection} from 'mysql';
+import { Connection, createConnection } from 'mysql';
 // tslint:disable-next-line:no-var-requires
-require('dotenv').config()
+require('dotenv').config();
 
-const { DB_HOST, DB_USER, DB_PASSWORD, DB_DATABASE } = process.env;
+const {
+  DB_HOST,
+  DB_USER,
+  DB_PASSWORD,
+  DB_DATABASE,
+  PROD_HOST,
+  PROD_DB_USER,
+  PROD_DB_PASSWORD,
+  PROD_DATABASE,
+} = process.env;
 
 const connectionConfig = {
   multipleStatements: true,
   host: DB_HOST,
   user: DB_USER,
   password: DB_PASSWORD,
-  database: DB_DATABASE
-}
+  database: DB_DATABASE,
+};
 
 const prodConnectionConfig = {
-  host: 'localhost',
-  user: 'root',
-  password: '34Zc18WfLn',
-  database: 'test'
-}
+  host: PROD_HOST,
+  user: PROD_DB_USER,
+  password: PROD_DB_PASSWORD,
+  database: PROD_DATABASE,
+};
 
 class DBConnection {
-  createProdConnection() : Connection {
+  createProdConnection(): Connection {
     return createConnection({
       ...prodConnectionConfig,
     });
   }
 
-  createToolConnection() : Connection {
+  createToolConnection(): Connection {
     return createConnection({
-      ...connectionConfig
-    })
+      ...connectionConfig,
+    });
   }
 }
 

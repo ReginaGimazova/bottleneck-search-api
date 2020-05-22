@@ -3,7 +3,8 @@ import { MysqlError } from 'mysql';
 
 import Logger from '../helpers/Logger';
 import { analyzeProgress } from '../AnalyzeProgress/AnalyzeProgress';
-import DBConnection from "../DatabaseAccess/DBConnection";
+import DBConnection from '../DatabaseAccess/DBConnection';
+import StatusesConfigurationDataStore from '../StatusesConfiguration/StatusesConfigurationDataStore';
 
 class ProfileQueriesDataStore {
   protected convertQueriesToTuple(queries) {
@@ -20,10 +21,12 @@ class ProfileQueriesDataStore {
     tuples
       .map(({ id, result }) =>
         result
-          .map(({Status, Duration}) => `('${id}', '${Status}', '${Duration}')`)
+          .map(
+            ({ Status, Duration }) => `('${id}', '${Status}', '${Duration}')`
+          )
           .join(', ')
       )
-      .join(', ')
+      .join(', ');
 
   private analyzeQueries({ tuples, callback, prodConnection }) {
     const logger = new Logger();
@@ -70,7 +73,6 @@ class ProfileQueriesDataStore {
       callback: async updatedTuples => {
         const values = this.prepareInsertValues(updatedTuples);
 
-        console.log(values)
         const queryString = `insert into master.profile_replay_info
           (query_id, status, duration) values ${values}`;
 
@@ -89,15 +91,38 @@ class ProfileQueriesDataStore {
     });
   }
 
-  public getProfileInfo(tables, callback){
+  public async getProfileInfo(tables, callback) {
     const dbConnection = new DBConnection();
     const connection = dbConnection.createToolConnection();
     const logger = new Logger();
+    const statusesConfigurationDataStore = new StatusesConfigurationDataStore();
+
+    let count = 0;
+
+    await statusesConfigurationDataStore.checkStatusesConfigExist({
+      connection,
+      logger,
+      callbackCountOfStatuses: currentCount => count = currentCount,
+    });
 
     const searchTables =
       tables.length > 0 ? tables.map(table => `"${table}"`).join(', ') : '';
 
-    const profileResult = `
+    const queriesWithoutStatuses = `
+      select JSON_ARRAYAGG(replay_info.status) critical_statuses, JSON_ARRAYAGG(duration) duration, parametrized_queries.query_count, parametrized_queries.parsed_query
+      from (
+        select
+          query_id,
+          status,
+          duration
+        from profile_replay_info)
+        as replay_info
+      inner join filtered_queries on query_id = filtered_queries.id
+      inner join parametrized_queries on filtered_queries.parametrized_query_id = parametrized_queries.id
+      group by replay_info.query_id;
+    `;
+
+    const queriesWithProfileStatuses = `
       select replay_info.status as critical_statuses, duration, parametrized_queries.query_count, parametrized_queries.parsed_query
         from (
           select
@@ -112,7 +137,7 @@ class ProfileQueriesDataStore {
       where statuses_configuration.status = true and type = 'PROFILE';
     `;
 
-    const profileResultWithTables = `
+    const queriesWithProfileStatusesWithTables = `
       select replay_info.status as critical_statuses, duration, parametrized_queries.query_count, parametrized_queries.parsed_query
         from (
           select
@@ -127,11 +152,17 @@ class ProfileQueriesDataStore {
         inner join tables_statistic on queries_to_tables.table_id = tables_statistic.id and table_name in (${searchTables})
         inner join parametrized_queries on filtered_queries.parametrized_query_id = parametrized_queries.id
       where statuses_configuration.status = true and type = 'PROFILE';
-    `
+    `;
 
-    let query = profileResult;
+    let query = queriesWithProfileStatuses;
     if (tables.length > 0) {
-      query = profileResultWithTables;
+      query = queriesWithProfileStatusesWithTables;
+    }
+
+    if (count === 0 && tables.length === 0){
+      query = queriesWithoutStatuses
+    } else if (count > 0 && tables.length > 0){
+      query = queriesWithProfileStatusesWithTables
     }
 
     connection.query(query, (err: MysqlError, result: any) => {
