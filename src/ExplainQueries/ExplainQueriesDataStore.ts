@@ -4,6 +4,7 @@ import { MysqlError } from 'mysql';
 import Logger from '../helpers/Logger';
 import { analyzeProgress } from '../AnalyzeProgress/AnalyzeProgress';
 import DBConnection from '../DatabaseAccess/DBConnection';
+import StatusesConfigurationDataStore from '../StatusesConfiguration/StatusesConfigurationDataStore';
 
 class ExplainQueriesDataStore {
   /**
@@ -77,7 +78,7 @@ class ExplainQueriesDataStore {
           (query_id, explain_result) values ?`;
 
         promisifyQuery(queryString, [values])
-          .then(result => {
+          .then(() => {
             analyzeProgress.explainResultInserted();
             callback(true);
           })
@@ -94,15 +95,27 @@ class ExplainQueriesDataStore {
    * @param tables
    * @param callback
    */
-  public getExplainInfo(tables, callback) {
+  public async getExplainInfo(tables, callback) {
     const dbConnection = new DBConnection();
     const connection = dbConnection.createToolConnection();
     const logger = new Logger();
+    const statusesConfigurationDataStore = new StatusesConfigurationDataStore();
+    let count = 0;
+
+    await statusesConfigurationDataStore.checkStatusesConfigExist({
+      connection,
+      logger,
+      callbackCountOfStatuses: currentCount => {
+        count = currentCount;
+      },
+    });
+
+    console.log(count);
 
     const searchTables =
       tables.length > 0 ? tables.map(table => `"${table}"`).join(', ') : '';
 
-    const explainResult = `
+    const queriesWithStatusesQuery = `
       select explain_info as critical_statuses, parametrized_queries.query_count, parametrized_queries.parsed_query
       from (
         select
@@ -116,7 +129,7 @@ class ExplainQueriesDataStore {
       where status = true and type = 'EXPLAIN';
     `;
 
-    const explainResultWithTables = `
+    const queryWithStatusesAndTablesQuery = `
       select explain_info as critical_statuses, parametrized_queries.query_count, parametrized_queries.parsed_query
       from (
         select
@@ -132,9 +145,24 @@ class ExplainQueriesDataStore {
       where status = true and type = 'EXPLAIN';
     `;
 
-    let query = explainResult;
-    if (tables.length > 0) {
-      query = explainResultWithTables;
+    const queryWithoutStatuses = `
+      select explain_info as critical_statuses, parametrized_queries.query_count, parametrized_queries.parsed_query
+      from (
+        select
+          query_id,
+          json_unquote(json_extract(explain_result, '$.Extra')) explain_info
+        from explain_replay_info)
+        as replay_info
+      inner join filtered_queries on query_id = filtered_queries.id
+      inner join parametrized_queries on filtered_queries.parametrized_query_id = parametrized_queries.id;
+    `;
+
+    let query = queriesWithStatusesQuery;
+
+    if (count === 0 && tables.length === 0){
+      query = queryWithoutStatuses
+    } else if (count > 0 && tables.length > 0){
+      query = queryWithStatusesAndTablesQuery;
     }
 
     connection.query(query, (err: MysqlError, result: any) => {

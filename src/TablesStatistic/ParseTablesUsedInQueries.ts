@@ -1,6 +1,6 @@
 import { Parser } from 'node-sql-parser';
 
-const usedTablesReceiver = (selectQuery: string) => {
+const parseTablesUsedInQueries = (selectQuery: string) => {
   const parser = new Parser();
 
   const opt = {
@@ -48,4 +48,4 @@ const usedTablesReceiver = (selectQuery: string) => {
   }
 };
 
-export default usedTablesReceiver;
+export default parseTablesUsedInQueries;

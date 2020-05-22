@@ -2,6 +2,7 @@ import { MysqlError } from 'mysql';
 
 import DBConnection from '../DatabaseAccess/DBConnection';
 import Logger from '../helpers/Logger';
+import {promisify} from "util";
 
 class StatusesConfigurationDataStore {
   save(statusesId = [], callback){
@@ -43,6 +44,18 @@ class StatusesConfigurationDataStore {
           callback(undefined, error)
         }
       })
+  }
+
+  async checkStatusesConfigExist({connection, logger, callbackCountOfStatuses}){
+    const promisifyQuery = promisify(connection.query).bind(connection);
+
+    const query = 'select count(id) as count from master.statuses_configuration;'
+    try {
+      const result = await promisifyQuery(query);
+      callbackCountOfStatuses(result[0].count)
+    } catch (e) {
+      logger.logError(e);
+    }
   }
 
   getAll(callback) {

@@ -1,8 +1,9 @@
 import { promisify } from 'util';
 import countBy from 'lodash/countBy';
+import without from 'lodash/without';
 
 import RejectedQueryDataStore from '../RejectedQueriesSaving/RejectedQueryDataStore';
-import usedTablesReceiver from './UsedTablesReceiver';
+import parseTablesUsedInQueries from './ParseTablesUsedInQueries';
 import Logger from '../helpers/Logger';
 import DBConnection from '../DatabaseAccess/DBConnection';
 import { analyzeProgress } from '../AnalyzeProgress/AnalyzeProgress';
@@ -46,7 +47,7 @@ class TablesStatisticDataStore {
   private parseTablesFromQuery({ query_text, connection }) {
     const rejectedQueryDataStore = new RejectedQueryDataStore();
 
-    const { error: parserError = '', tables = [] } = usedTablesReceiver(
+    const { error: parserError = '', tables = [] } = parseTablesUsedInQueries(
       query_text
     );
 
@@ -80,7 +81,7 @@ class TablesStatisticDataStore {
       connection.query('SET FOREIGN_KEY_CHECKS = 0;');
 
       await promisifyQuery(
-        `insert into master.queries_to_tables (query_id, table_id) VALUES ${insertQuery}`
+        `insert into master.queries_to_tables (query_id, table_id) values ${insertQuery}`
       );
 
       connection.query('SET FOREIGN_KEY_CHECKS = 0;');
@@ -142,17 +143,21 @@ class TablesStatisticDataStore {
    * @param callback
    */
   save({ connection, queries, callback }) {
-    const tuples = this.createQueriesTuple(queries);
+    let tuples = this.createQueriesTuple(queries);
 
     queries.forEach((query, index) => {
       const { query_text } = query;
-      tuples[index].tables = countBy(
-        this.parseTablesFromQuery({
-          query_text,
-          connection,
-        })
-      );
+      const usedTables = this.parseTablesFromQuery({query_text, connection})
+
+      if (usedTables.length === 0){
+        tuples[index] = undefined
+      }
+      else {
+        tuples[index].tables = countBy(usedTables);
+      }
     });
+
+    tuples = without(tuples, undefined);
 
     tuples.forEach((tuple, index) => {
       const isThroughFinalQuery = index === tuples.length - 1;
