@@ -10,10 +10,13 @@ class StatusesConfigurationDataStore {
     const connection = dbConnection.createToolConnection();
     const logger = new Logger();
 
-    const idsToString =
-        statusesId.length > 0 ? statusesId.map(id => `"${id}"`).join(', ') : '';
+    connection.query(`
+      update statuses_configuration 
+      set status = 
+        IF (
+          find_in_set (id, "${statusesId.join(', ')}") > 0,
+        1, 0);`,
 
-    connection.query(`update statuses_configuration set status = IF(id in (${idsToString}), 1, 0);`,
       (err: MysqlError, result: any) => {
       if (result) {
         callback(result, undefined);
@@ -46,10 +49,10 @@ class StatusesConfigurationDataStore {
       })
   }
 
-  async checkStatusesConfigExist({connection, logger, callbackCountOfStatuses}){
+  async checkStatusesConfigExist({connection, logger, type, callbackCountOfStatuses}){
     const promisifyQuery = promisify(connection.query).bind(connection);
 
-    const query = 'select count(id) as count from master.statuses_configuration;'
+    const query = `select count(id) as count from master.statuses_configuration where status = 1 and type = "${type}";`
     try {
       const result = await promisifyQuery(query);
       callbackCountOfStatuses(result[0].count)
