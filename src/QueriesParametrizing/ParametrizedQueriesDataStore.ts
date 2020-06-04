@@ -2,14 +2,13 @@ import { Connection, MysqlError } from 'mysql';
 import sha from 'sha1';
 import { promisify } from 'util';
 
-import RejectedQueryDataStore from '../RejectedQueriesSaving/RejectedQueryDataStore';
+import {rejectedQueryDataStore} from '../RejectedQueriesSaving/RejectedQueryDataStore';
 import queryParametrizer from './queryParametrizer';
-import Logger from '../helpers/Logger';
+import {logger} from '../helpers/Logger';
 import DBConnection from '../DatabaseAccess/DBConnection';
 
 class ParametrizedQueriesDataStore {
   private static parametrizeQuery({ argument, connection }) {
-    const rejectedQueryDataStore = new RejectedQueryDataStore();
     const { query = '', error: parametrizeError = '' } = queryParametrizer(
       argument
     );
@@ -41,10 +40,10 @@ class ParametrizedQueriesDataStore {
     }
 
     const hash = sha(query);
-    const valuesTuple = `("${query}", "${hash}", "${user_host}", 1)`;
+    const valuesTuple = `("${query}", "${hash}", 1)`;
 
     const insertQuery = `
-        insert into master.parametrized_queries (parsed_query, parsed_query_hash, user_host, query_count) 
+        insert into master.parametrized_queries (parsed_query, parsed_query_hash, query_count) 
         values ${valuesTuple} 
         on duplicate key 
         update query_count = query_count + 1`;
@@ -57,34 +56,35 @@ class ParametrizedQueriesDataStore {
       tables.length > 0 ? tables.map(table => `"${table}"`).join(', ') : '';
 
     const groupBySqlQueryString =
-      `select id, parsed_query, SUM(query_count) as query_count from master.parametrized_queries 
-       group by parsed_query_hash order by query_count desc;`;
+      `select id, parsed_query, query_count from master.parametrized_queries 
+       order by query_count desc;`;
 
+    // TODO: change with join to user host
     const groupBySqlAndHostQueryString =
       'select id, parsed_query, query_count from master.parametrized_queries order by query_count desc;';
 
     const groupBySqlWithTables = `
-       select parametrized_queries.id, parsed_query, count(parametrized_queries.id) as query_count
-       from master.parametrized_queries
-       inner join filtered_queries fq on parametrized_queries.id = fq.parametrized_query_id
-       inner join queries_to_tables qtt on fq.id = qtt.query_id
-       inner join tables_statistic ts on qtt.table_id = ts.id and table_name in (${tablesToString})
-       group by  parsed_query_hash
-       order by query_count desc;
+      select parametrized_queries.id, parametrized_queries.parsed_query, parametrized_queries.query_count as query_count
+      from master.parametrized_queries
+      inner join filtered_queries on parametrized_queries.id = filtered_queries.parametrized_query_id
+      inner join queries_to_tables on filtered_queries.id = queries_to_tables.query_id
+      inner join tables_statistic on queries_to_tables.table_id = tables_statistic.id where
+      json_search (json_array(${tablesToString}), 'one', tables_statistic.table_name ) > 0
+      group by parsed_query_hash;
     `;
 
+    // TODO: change with join to user host
     const groupBySqlAndHostWithTables = `
-       select parametrized_queries.id, parsed_query, count(parametrized_queries.id) as query_count from 
-       ( select id from tables_statistic where table_name in (${tablesToString})) as tables 
-       inner join queries_to_tables on table_id = tables.id 
-       inner join filtered_queries on queries_to_tables.query_id = filtered_queries.id 
-       inner join parametrized_queries on filtered_queries.parametrized_query_id = parametrized_queries.id
-       group by  parsed_query_hash, parametrized_queries.user_host
-       order by query_count desc;`;
+      select parametrized_queries.id, parsed_query, count(parametrized_queries.id) as query_count
+      from master.parametrized_queries
+      inner join filtered_queries fq on parametrized_queries.id = fq.parametrized_query_id
+      inner join queries_to_tables qtt on fq.id = qtt.query_id
+      inner join tables_statistic ts on qtt.table_id = ts.id and find_in_set (table_name, "${tables.join(', ')}") > 0
+      group by  parsed_query_hash
+      order by query_count desc;`;
 
     const dbConnection = new DBConnection();
     const connection = dbConnection.createToolConnection();
-    const logger = new Logger();
 
     let queryString = groupBySqlQueryString;
     const searchQueriesWithTables = !!tables.length;

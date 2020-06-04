@@ -9,8 +9,8 @@ class ExplainQueriesRoutes {
   }
 
   private config(): void {
-    this.router.get('/', (req: express.Request, res: express.Response) => {
-      explainQueriesController.getAll(req, res)
+    this.router.get('/', async (req: express.Request, res: express.Response) => {
+      await explainQueriesController.getAll(req, res)
     });
   }
 }

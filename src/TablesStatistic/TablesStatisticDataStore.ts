@@ -2,9 +2,9 @@ import { promisify } from 'util';
 import countBy from 'lodash/countBy';
 import without from 'lodash/without';
 
-import RejectedQueryDataStore from '../RejectedQueriesSaving/RejectedQueryDataStore';
+import {rejectedQueryDataStore} from '../RejectedQueriesSaving/RejectedQueryDataStore';
 import parseTablesUsedInQueries from './ParseTablesUsedInQueries';
-import Logger from '../helpers/Logger';
+import {logger} from '../helpers/Logger';
 import DBConnection from '../DatabaseAccess/DBConnection';
 import { analyzeProgress } from '../AnalyzeProgress/AnalyzeProgress';
 
@@ -45,8 +45,6 @@ class TablesStatisticDataStore {
    * @param connection
    */
   private parseTablesFromQuery({ query_text, connection }) {
-    const rejectedQueryDataStore = new RejectedQueryDataStore();
-
     const { error: parserError = '', tables = [] } = parseTablesUsedInQueries(
       query_text
     );
@@ -73,8 +71,6 @@ class TablesStatisticDataStore {
     tuples,
   }) {
     const promisifyQuery = promisify(connection.query).bind(connection);
-    const logger = new Logger();
-
     const insertQuery = this.convertTupleToQueryString(tuples).join(', ');
 
     try {
@@ -104,7 +100,6 @@ class TablesStatisticDataStore {
     callbackTuple,
   }) => {
     const promisifyQuery = promisify(connection.query).bind(connection);
-    const logger = new Logger();
 
     const { tables, table_ids } = tuple;
     const tableNames = Object.keys(tables);
@@ -184,7 +179,6 @@ class TablesStatisticDataStore {
   getAll(callback) {
     const dbConnection = new DBConnection();
     const connection = dbConnection.createToolConnection();
-    const logger = new Logger();
 
     connection.query(
       'select id, table_name, call_count from master.tables_statistic order by call_count asc;',

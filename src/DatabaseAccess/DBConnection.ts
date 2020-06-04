@@ -28,6 +28,11 @@ const prodConnectionConfig = {
   database: PROD_DATABASE,
 };
 
+/**
+ * prodConnectionConfig - connection config to database with original tables on production server
+ * connectionConfig - connection config to the database of this tool
+ */
+
 class DBConnection {
   createProdConnection(): Connection {
     return createConnection({

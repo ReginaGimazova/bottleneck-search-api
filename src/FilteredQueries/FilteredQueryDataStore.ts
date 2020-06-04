@@ -4,7 +4,7 @@ import { promisify } from 'util';
 import TablesStatisticDataStore from '../TablesStatistic/TablesStatisticDataStore';
 import ParametrizedQueriesDataStore from '../QueriesParametrizing/ParametrizedQueriesDataStore';
 import DBConnection from '../DatabaseAccess/DBConnection';
-import Logger from '../helpers/Logger';
+import {logger} from '../helpers/Logger';
 import { analyzeProgress } from '../AnalyzeProgress/AnalyzeProgress';
 import ExplainQueriesDataStore from '../ExplainQueries/ExplainQueriesDataStore';
 import ProfileQueriesDataStore from '../ProfileQueries/ProfileQueriesDataStore';
@@ -14,20 +14,6 @@ class FilteredQueryDataStore {
     const prodConnection = new DBConnection();
     return prodConnection.createProdConnection();
   }
-
-  /**
-   *
-   * This function takes tuple as argument and returns ready for insert query string
-   * user_host, argument, parametrized_query_id - tuple fields
-   */
-  private convertTupleToQueryString = tuples => {
-    const queriesArray = tuples.map(
-      ({ user_host, argument, parametrized_query_id }) =>
-        `('${user_host}', '${argument}', ${parametrized_query_id})`
-    );
-
-    return queriesArray.join(', ');
-  };
 
   /**
    *
@@ -47,16 +33,34 @@ class FilteredQueryDataStore {
 
   /**
    *
-   * @param connection
-   * @param queries
-   * @param callback
+   * This function takes tuples (which created in 'createQueriesTuple' method) as argument
+   * and returns ready for insert query string
+   * tuple fields: user_host - from original log, argument - field from original log, parametrized_query_id
+   */
+  private convertTupleToQueryString = tuples => {
+    const queriesArray = tuples.map(
+      ({ user_host, argument, parametrized_query_id }) =>
+        `('${user_host}', '${argument}', ${parametrized_query_id})`
+    );
+
+    return queriesArray.join(', ');
+  };
+
+  /**
+   *
+   * @param connection - connection to tool database
+   * @param queries - filtered queries
+   * @param callback - return updated tuples with parametrized_queries_id for each tuple
+   * (if an error occurred during parsing using the 'node-sql-parser' library,
+   * then such tuple cancelled (= undefined))
    *
    * Callback from save method return query tuples with parametrized_query_id
    */
+
+  // maybe better move to ParametrizedQueriesDataStore
   private getParametrizedQueries({ connection, queries, callback }) {
     const parametrizedQueriesDataStore = new ParametrizedQueriesDataStore();
     const tuples = this.createQueriesTuple(queries);
-    const logger = new Logger();
 
     tuples.forEach(async (tuple, index) => {
       try {
@@ -87,12 +91,10 @@ class FilteredQueryDataStore {
 
   /**
    *
-   * @param connection
-   * @param logger
-   *
-   * Callback from save method returns received original queries that have already passed through the filter
+   * @param promisifyQuery - promisified query for connection to tool database
+   * This method supports 2 filtering modes (S - static, R - pattern) for filter original queries
    */
-  private retrieveOriginalQueriesAccordingToFilter({ promisifyQuery, logger }) {
+  private retrieveOriginalQueriesByFilter(promisifyQuery) {
     return promisifyQuery(
       'select user_host, argument from master.original_queries ' +
         'where not exists ( ' +
@@ -110,7 +112,7 @@ class FilteredQueryDataStore {
 
   /**
    *
-   * @param connection
+   * @param connection - connection to tool database
    *
    */
   private getAllFilteredQueries(connection) {
@@ -118,6 +120,18 @@ class FilteredQueryDataStore {
     return promisifyQuery('select id, query_text from master.filtered_queries');
   }
 
+  /**
+   *
+   * @param connection - connection to tool database
+   * @param filteredQueries
+   *
+   * This method checks finishing of the analysis to commit the transaction and close connections
+   *
+   * tablesStatisticDataStore.save(), explainQueriesDataStore.save() and profileQueriesDataStore.save() -
+   * async functions which work asynchronously, since they are independent of each other
+   */
+
+  // check is this functions async
   private async nextAnalyzeProcess({ connection, filteredQueries }) {
     const tablesStatisticDataStore = new TablesStatisticDataStore();
     const explainQueriesDataStore = new ExplainQueriesDataStore();
@@ -139,7 +153,7 @@ class FilteredQueryDataStore {
       }
     };
 
-    await tablesStatisticDataStore.save({
+    tablesStatisticDataStore.save({
       connection,
       queries: filteredQueries,
       callback: tablesInserted => {
@@ -170,27 +184,29 @@ class FilteredQueryDataStore {
   }
   /**
    *
-   * @param connection
+   * @param connection - connection to tool database
    *
-   * Insert filtered queries and call saving tables
+   * Insert filtered queries and next steps for analysis
    */
+
+  // TODO: refactor this method
   async save(connection) {
-    const logger = new Logger();
     const promisifyQuery = promisify(connection.query).bind(connection);
 
     try {
-      const queries = await this.retrieveOriginalQueriesAccordingToFilter({
-        promisifyQuery,
-        logger,
-      });
+      const queries = await this.retrieveOriginalQueriesByFilter(promisifyQuery);
+
       if (!queries.length) {
         return;
       }
+
       this.getParametrizedQueries({
         connection,
         queries,
         callback: async tuples => {
           const values = this.convertTupleToQueryString(tuples);
+
+          // TODO: try to remove this check
 
           connection.query('SET FOREIGN_KEY_CHECKS = 0;');
 
@@ -199,18 +215,20 @@ class FilteredQueryDataStore {
 
           try {
             await promisifyQuery(insertQuery);
-            analyzeProgress.filteredQueriesInserted();
             connection.query('SET FOREIGN_KEY_CHECKS = 1;');
+            analyzeProgress.filteredQueriesInserted();
 
           } catch (insertError) {
+            analyzeProgress.handleErrorOnLogAnalyze(
+              'There was an error in analyzing the general log during the inserting of filtered queries'
+            )
             logger.logError(insertError);
             connection.rollback();
           }
 
           try {
-            const filteredQueries = await this.getAllFilteredQueries(
-              connection
-            );
+            const filteredQueries = await this.getAllFilteredQueries(connection);
+
             if (!filteredQueries.length) {
               throw new Error(
                 'Filtered queries table does not include any data'
@@ -228,38 +246,6 @@ class FilteredQueryDataStore {
       connection.rollback();
       logger.logError(queriesError);
     }
-  }
-
-  /**
-   *
-   * @param callback
-   */
-  getAll(callback) {
-    const queries = [];
-
-    const dbConnection = new DBConnection();
-    const connection = dbConnection.createToolConnection();
-    const logger = new Logger();
-
-    connection.query(
-      'select id, query_text from filtered_queries;',
-      (err: MysqlError, result: any) => {
-        if (result) {
-          result.forEach(({ query_text, id }) => {
-            queries.push({
-              query_text,
-              id,
-            });
-          });
-          callback(queries, undefined);
-        }
-        if (err) {
-          logger.logError(err);
-          callback(undefined, err);
-        }
-      }
-    );
-    connection.end();
   }
 }
 

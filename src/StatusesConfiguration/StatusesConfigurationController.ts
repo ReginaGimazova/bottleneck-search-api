@@ -1,9 +1,21 @@
 import { Request, Response } from 'express';
 import StatusesConfigurationDataStore from "./StatusesConfigurationDataStore";
+import {checkTableInDatabase} from "../helpers/CheckTableInDatabase";
 
 export class StatusesConfigurationController {
   public getAll(req: Request, res: Response) {
     const configurationDataStore = new StatusesConfigurationDataStore();
+
+    checkTableInDatabase.checkTable({
+      tableName: 'statuses_configuration',
+      callbackCheckTable: existCheckResult => {
+        if (!existCheckResult) {
+          res.status(200).send([]);
+          return;
+        }
+
+      },
+    });
 
     configurationDataStore.getAll((data, err) => {
       if (err)
@@ -16,11 +28,11 @@ export class StatusesConfigurationController {
     });
   }
 
-  public save(req: Request, res: Response) {
+  public update(req: Request, res: Response) {
     const configurationDataStore = new StatusesConfigurationDataStore();
-    const statusIds = req.body.status_ids;
+    const statuses = req.body.statuses;
 
-    configurationDataStore.save(statusIds, (data, err) => {
+    configurationDataStore.update(statuses, (data, err) => {
       if (err){
         res.status(404).send({
           message:
