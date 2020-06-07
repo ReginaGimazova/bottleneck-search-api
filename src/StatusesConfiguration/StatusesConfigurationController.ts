@@ -34,9 +34,9 @@ export class StatusesConfigurationController {
 
     configurationDataStore.update(statuses, (data, err) => {
       if (err){
-        res.status(404).send({
+        res.status(500).send({
           message:
-            err.message || 'Error'
+            err.message || 'Update status error'
         });
       }
       else {
@@ -47,12 +47,27 @@ export class StatusesConfigurationController {
 
   public addStatus(req: Request, res: Response) {
     const configurationDataStore = new StatusesConfigurationDataStore();
-    const {value, status, type} = req.body;
+    const {value, mode, type} = req.body;
 
-    configurationDataStore.addStatus({value, status, type}, (data, err) => {
+    configurationDataStore.addStatus({value, mode, type}, (data, err) => {
       if (err){
-        res.status(404).send({
-          message: err.message || 'Error'
+        res.status(500).send({
+          message: err.message || 'Add status error'
+        })
+      } else {
+        this.getAll(req, res);
+      }
+    })
+  }
+
+  public removeStatus(req: Request, res: Response) {
+    const configurationDataStore = new StatusesConfigurationDataStore();
+    const {value, type} = req.body;
+
+    configurationDataStore.removeStatus({value, type}, (data, err) => {
+      if (err){
+        res.status(500).send({
+          message: err.message || 'Remove status error'
         })
       } else {
         this.getAll(req, res);

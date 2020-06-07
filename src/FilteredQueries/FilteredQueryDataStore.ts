@@ -1,4 +1,3 @@
-import { MysqlError } from 'mysql';
 import { promisify } from 'util';
 
 import TablesStatisticDataStore from '../TablesStatistic/TablesStatisticDataStore';
@@ -115,7 +114,7 @@ class FilteredQueryDataStore {
    * @param connection - connection to tool database
    *
    */
-  private getAllFilteredQueries(connection) {
+  public getAllFilteredQueries(connection) {
     const promisifyQuery = promisify(connection.query).bind(connection);
     return promisifyQuery('select id, query_text from master.filtered_queries');
   }

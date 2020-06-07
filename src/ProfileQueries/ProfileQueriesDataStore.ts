@@ -38,23 +38,19 @@ class ProfileQueriesDataStore {
 
   /**
    *
-   * @param tuples
-   * @param callback
-   * @param prodConnection
+   * @param tuples - tuples, created in convertQueriesToTuple method (result = undefined)
+   * @param connection - connection to tool database
+   * @param prodConnection - connection to production database, which contains original info
    */
   private analyzeQueries({ tuples, callback, prodConnection }) {
     const promisifyQuery = promisify(prodConnection.query).bind(prodConnection);
 
     tuples.forEach(async ({ query_text }, index) => {
       try {
-        await promisifyQuery(query_text);
-      } catch (e) {
-        logger.logError(e.message);
-      }
-
-      try {
-        const analyzeResult = await promisifyQuery('show profile;');
-        tuples[index].result = analyzeResult;
+        const multipleQueryResult = await promisifyQuery(`
+          ${query_text}; 
+          show profile;`);
+        tuples[index].result = multipleQueryResult[1];
 
         if (index === tuples.length - 1) {
           callback(tuples);
@@ -104,6 +100,10 @@ class ProfileQueriesDataStore {
           });
       },
     });
+  }
+
+  public updateProfileResult(profileResultCallback){
+    // TODO: complete, create common class for Explain and Profile
   }
 
   /**

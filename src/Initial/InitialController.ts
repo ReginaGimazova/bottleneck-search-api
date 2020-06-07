@@ -8,7 +8,11 @@ export class InitialController {
       tableName: 'original_queries',
       callbackCheckTable: exist => {
         if (exist){
-          originalQueryController.save();
+          databasePrepare.truncateTables(tablesTruncated => {
+            if (tablesTruncated) {
+              originalQueryController.save();
+            }
+          })
         } else {
           databasePrepare.createTables();
         }

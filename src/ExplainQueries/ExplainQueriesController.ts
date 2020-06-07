@@ -1,27 +1,13 @@
 import ExplainQueriesDataStore from './ExplainQueriesDataStore';
 import ControllerBase from '../helpers/ControllerBase';
 import { checkTableInDatabase } from '../helpers/CheckTableInDatabase';
+import databasePrepare from '../Initial/DatabasePrepare';
 
 export class ExplainQueriesController extends ControllerBase {
-  public getAll = async (req, res) => {
+
+  private getExplainInfo = async (req, res) => {
     const explainQueriesDataStore = new ExplainQueriesDataStore();
-
     const { page, limit, tables } = this.parseRequest(req);
-
-    checkTableInDatabase.checkTable({
-      tableName: 'explain_replay_info',
-      callbackCheckTable: existCheckResult => {
-        if (!existCheckResult) {
-          res.status(200).send({
-            page: 0,
-            page_count: 0,
-            queries: [],
-          });
-
-          return;
-        }
-      },
-    });
 
     await explainQueriesDataStore.getExplainInfo(tables, (data, err) => {
       if (err)
@@ -39,6 +25,42 @@ export class ExplainQueriesController extends ControllerBase {
         });
       }
     });
+  };
+
+  public update = async (req, res) => {
+    const explainQueriesDataStore = new ExplainQueriesDataStore();
+    await databasePrepare.truncateCurrentTable('explain_replay_info');
+
+    explainQueriesDataStore.updateExplainResult(async (data, error) => {
+      if (error)
+        res.status(500).send({
+          message:
+            error.message ||
+            'Error occurred on the server while receiving explain info data.',
+        });
+      else {
+        await this.getExplainInfo(req, res)
+      }
+    });
+  }
+
+  public getAll = async (req, res) => {
+    checkTableInDatabase.checkTable({
+      tableName: 'explain_replay_info',
+      callbackCheckTable: existCheckResult => {
+        if (!existCheckResult) {
+          res.status(200).send({
+            page: 0,
+            page_count: 0,
+            queries: [],
+          });
+
+          return;
+        }
+      },
+    });
+
+    await this.getExplainInfo(req, res)
   };
 }
 

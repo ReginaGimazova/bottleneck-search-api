@@ -1,10 +1,15 @@
 import { MysqlError } from 'mysql';
+import {promisify} from 'util';
 
 import DBConnection from '../DatabaseAccess/DBConnection';
 import {logger} from '../helpers/Logger';
-import { promisify } from 'util';
 
 class StatusesConfigurationDataStore {
+  /**
+   *
+   * @param statuses - all statuses from FE, which containt statuses with updated modes
+   * @param callback - return updated statuses
+   */
   update(statuses = [], callback) {
     const dbConnection = new DBConnection();
     const connection = dbConnection.createToolConnection();
@@ -41,14 +46,19 @@ class StatusesConfigurationDataStore {
     });
   }
 
+  /**
+   *
+   * @param newStatusData - new configuration status which contains value, type: Explain or Profile and mode
+   * @param callback - return error or success insert message
+   */
   addStatus(newStatusData, callback) {
     const dbConnection = new DBConnection();
     const connection = dbConnection.createToolConnection();
 
-    const { status, value, type } = newStatusData;
+    const { mode, value, type } = newStatusData;
     const queryString =
       'insert into statuses_configuration (value, type, mode) values ?';
-    const values = [[`${value}`, `${type.toUpperCase()}`, `${status}`]];
+    const values = [[`${value}`, `${type.toUpperCase()}`, `${mode}`]];
 
     connection.query(
       queryString,
@@ -64,6 +74,35 @@ class StatusesConfigurationDataStore {
     );
   }
 
+  /**
+   *
+   * @param statusValue - value of status which must be removed
+   * @param callback - return error or success removing message
+   */
+  removeStatus(statusValue, callback) {
+    const dbConnection = new DBConnection();
+    const connection = dbConnection.createToolConnection();
+    const promisifyQuery = promisify(connection.query).bind(connection);
+    const { value, type } = statusValue;
+
+    const statement = `delete from statuses_configuration where value = "${value}" and type = "${type}"`;
+
+    promisifyQuery(statement)
+      .then(result => {
+        callback(result, undefined)
+      })
+      .catch(removeError => {
+        console.log(removeError)
+        callback(undefined, removeError.message)
+      })
+  }
+
+  /**
+   *
+   * @param connection - tool connection
+   * @param type - type of configuration status: Explain or Profile
+   * @param callbackCountOfStatuses - callback which returns count of statuses for this type
+   */
   async checkStatusesConfigExist({
     connection,
     type,
@@ -80,6 +119,10 @@ class StatusesConfigurationDataStore {
     }
   }
 
+  /**
+   *
+   * @param callback - return all status configurations
+   */
   getAll(callback) {
     const dbConnection = new DBConnection();
     const connection = dbConnection.createToolConnection();

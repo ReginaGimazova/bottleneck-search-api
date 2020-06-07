@@ -85,6 +85,14 @@ class DatabasePrepare {
     });
   }
 
+  async truncateCurrentTable(tableName) {
+    const dbConnection = new DBConnection();
+    const connection = dbConnection.createToolConnection();
+    const promisifyQuery = promisify(connection.query).bind(connection);
+
+    await promisifyQuery(`truncate master.${tableName};`)
+  }
+
   truncateTables(prepareDatabaseCallback) {
     const dbConnection = new DBConnection();
     const connection = dbConnection.createToolConnection();
@@ -110,8 +118,8 @@ class DatabasePrepare {
         `)
           .then(() => {
             connection.commit();
-            connection.end();
             prepareDatabaseCallback(true);
+            connection.end();
           })
           .catch(e => {
             logger.logError(e);

@@ -6,6 +6,7 @@ import { analyzeProgress } from '../AnalyzeProgress/AnalyzeProgress';
 import DBConnection from '../DatabaseAccess/DBConnection';
 import StatusesConfigurationDataStore from '../StatusesConfiguration/StatusesConfigurationDataStore';
 import { rejectedQueryDataStore } from '../RejectedQueriesSaving/RejectedQueryDataStore';
+import FilteredQueryDataStore from "../FilteredQueries/FilteredQueryDataStore";
 
 class ExplainQueriesDataStore {
   /**
@@ -105,6 +106,31 @@ class ExplainQueriesDataStore {
     });
   }
 
+  public updateExplainResult(explainResultCallback) {
+    const dbConnection = new DBConnection();
+    const connection = dbConnection.createToolConnection();
+    const prodConnection = dbConnection.createProdConnection();
+
+    const filteredQueryDataStore = new FilteredQueryDataStore();
+    filteredQueryDataStore
+      .getAllFilteredQueries(connection)
+      .then(queries => {
+        this.save({connection, prodConnection, queries, callback: (inserted => {
+          if (inserted){
+            connection.end();
+            prodConnection.end();
+            explainResultCallback(
+              {status: inserted},
+              inserted ? undefined : new Error('There was an error in analyze queries by EXPLAIN'));
+          }
+        })});
+      })
+      .catch(error => {
+        logger.logError(error.message);
+        connection.end();
+        prodConnection.end();
+      })
+  }
   /**
    *
    * @param tables - a set of tables for find matching queries
