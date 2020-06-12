@@ -30,6 +30,14 @@ class DatabasePrepare {
       source: `${root}/parametrized_queries.sql`,
       exist: false,
     },
+    user_host: {
+      source: `${root}/user_host.sql`,
+      exist: false,
+    },
+    queries_to_user_host: {
+      source: `${root}/queries_to_user_host.sql`,
+      exist: false
+    },
     filtered_queries: {
       source: `${root}/filtered_queries.sql`,
       exist: false,
@@ -107,9 +115,11 @@ class DatabasePrepare {
          
           truncate master.original_queries;
           truncate master.queries_to_tables;
+          truncate master.queries_to_user_host;
           truncate master.filtered_queries;
           truncate master.rejected_original_queries;
-          truncate table master.parametrized_queries;
+          truncate master.parametrized_queries;
+          truncate master.user_host;
           truncate master.tables_statistic;
           truncate master.explain_replay_info;
           truncate master.profile_replay_info;
