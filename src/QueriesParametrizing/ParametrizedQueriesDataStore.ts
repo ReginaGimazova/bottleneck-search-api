@@ -6,10 +6,11 @@ import {rejectedQueryDataStore} from '../RejectedQueriesSaving/RejectedQueryData
 import queryParametrizer from './queryParametrizer';
 import {logger} from '../helpers/Logger';
 import DBConnection from '../DatabaseAccess/DBConnection';
+import {analyzeProgress} from "../AnalyzeProgress/AnalyzeProgress";
 
 class ParametrizedQueriesDataStore {
   private static parametrizeQuery({ argument, connection }) {
-    const { query = '', error: parametrizeError = '' } = queryParametrizer(
+    const {query = '', error: parametrizeError = ''} = queryParametrizer(
       argument
     );
 
@@ -26,10 +27,42 @@ class ParametrizedQueriesDataStore {
     }
   }
 
+
+  /**
+   *
+   * @param connection
+   * @param tuples
+   */
+  public saveUserHost({connection, tuples}) {
+    const promisifyQuery = promisify(connection.query).bind(connection);
+
+    tuples.forEach(({user_host, parametrized_query_id}) => {
+      const insertHostString = `
+        insert into master.user_host (user_host) values ("${user_host}")
+      `;
+
+      promisifyQuery(insertHostString)
+        .then(async ({insertId}) => {
+          const insertRelation = `
+            insert into master.queries_to_user_host (parametrized_query_id, user_host_id)
+            values ("${parametrized_query_id}", "${insertId}")
+          `;
+
+          await promisifyQuery(insertRelation)
+
+        })
+        .catch((e) => {
+          logger.logError(e);
+          connection.rollback();
+        })
+    })
+  }
+
+
   save(connection: Connection, tuple) {
     const promisifyQuery = promisify(connection.query).bind(connection);
 
-    const { argument, user_host } = tuple;
+    const { argument } = tuple;
     const query = ParametrizedQueriesDataStore.parametrizeQuery({
       argument,
       connection,
@@ -51,51 +84,74 @@ class ParametrizedQueriesDataStore {
     return promisifyQuery(insertQuery);
   }
 
+  /**
+   *
+   * @param connection - connection to tool database
+   * @param tuples - created tuples from filtered queries
+   * @param callback - return updated tuples with parametrized_queries_id for each tuple
+   * (if an error occurred during parsing using the 'node-sql-parser' library,
+   * then such tuple cancelled (= undefined))
+   *
+   * Callback from save method return updated query tuples with parametrized_query_id
+   */
+
+  public getParametrizedQueries({ connection, tuples, callback }) {
+    tuples.forEach(async (tuple, index) => {
+      try {
+        const parametrizedQueryResult = await this.save(
+          connection,
+          tuple
+        );
+
+        if (!parametrizedQueryResult) {
+          tuples[index] = undefined;
+        } else {
+          const { insertId } = parametrizedQueryResult;
+          tuples[index].parametrized_query_id = insertId;
+        }
+
+        const correctTuples = tuples.filter(t => t);
+
+        if (!correctTuples.find(t => !t.parametrized_query_id)) {
+          analyzeProgress.parametrizedQueriesInserted();
+          callback(correctTuples);
+        }
+      } catch (error) {
+        logger.logError(error);
+        connection.rollback();
+      }
+    });
+  }
+
   getAll({ tables, byHost, callback }) {
-    const tablesToString =
-      tables.length > 0 ? tables.map(table => `"${table}"`).join(', ') : '';
-
-    const groupBySqlQueryString =
-      `select id, parsed_query, query_count from master.parametrized_queries 
-       order by query_count desc;`;
-
-    // TODO: change with join to user host
-    const groupBySqlAndHostQueryString =
-      'select id, parsed_query, query_count from master.parametrized_queries order by query_count desc;';
-
-    const groupBySqlWithTables = `
-      select parametrized_queries.id, parametrized_queries.parsed_query, parametrized_queries.query_count as query_count
-      from master.parametrized_queries
-      inner join filtered_queries on parametrized_queries.id = filtered_queries.parametrized_query_id
-      inner join queries_to_tables on filtered_queries.id = queries_to_tables.query_id
-      inner join tables_statistic on queries_to_tables.table_id = tables_statistic.id where
-      json_search (json_array(${tablesToString}), 'one', tables_statistic.table_name ) > 0
-      group by parsed_query_hash;
-    `;
-
-    // TODO: change with join to user host
-    const groupBySqlAndHostWithTables = `
-      select parametrized_queries.id, parsed_query, count(parametrized_queries.id) as query_count
-      from master.parametrized_queries
-      inner join filtered_queries fq on parametrized_queries.id = fq.parametrized_query_id
-      inner join queries_to_tables qtt on fq.id = qtt.query_id
-      inner join tables_statistic ts on qtt.table_id = ts.id and find_in_set (table_name, "${tables.join(', ')}") > 0
-      group by  parsed_query_hash
-      order by query_count desc;`;
-
     const dbConnection = new DBConnection();
     const connection = dbConnection.createToolConnection();
 
-    let queryString = groupBySqlQueryString;
-    const searchQueriesWithTables = !!tables.length;
+    const searchTables =
+      tables.length > 0 ? tables.map(table => `"${table}"`).join(', ') : '';
 
-    if (byHost && !searchQueriesWithTables) {
-      queryString = groupBySqlAndHostQueryString;
-    } else if (byHost && searchQueriesWithTables) {
-      queryString = groupBySqlAndHostWithTables;
-    } else if (!byHost && searchQueriesWithTables) {
-      queryString = groupBySqlWithTables;
-    }
+    const tablesJoinPart = `
+      inner join filtered_queries on parametrized_queries.id = filtered_queries.parametrized_query_id
+      inner join queries_to_tables on filtered_queries.id = queries_to_tables.query_id
+      inner join tables_statistic
+        on queries_to_tables.table_id = tables_statistic.id
+        and json_search(json_array(${searchTables}), 'all', table_name) > 0
+    `;
+
+    const groupBySql =
+      `select id, parsed_query, query_count from master.parametrized_queries 
+       ${tables.length > 0 ? tablesJoinPart : ''}
+       order by query_count desc;`;
+
+    const groupBySqlAndHost = `
+      select parametrized_queries.id, parsed_query, query_count
+      from master.parametrized_queries
+      inner join master.queries_to_user_host on parametrized_queries.id = queries_to_user_host.parametrized_query_id
+      inner join master.user_host on queries_to_user_host.user_host_id = user_host.id
+      ${tables.length > 0 ? tablesJoinPart : ''}
+      group by parsed_query_hash;`;
+
+    const queryString = byHost ? groupBySqlAndHost : groupBySql;
 
     connection.query(queryString, (err: MysqlError, result: any) => {
       if (result) {

@@ -3,7 +3,7 @@ import { promisify } from 'util';
 import TablesStatisticDataStore from '../TablesStatistic/TablesStatisticDataStore';
 import ParametrizedQueriesDataStore from '../QueriesParametrizing/ParametrizedQueriesDataStore';
 import DBConnection from '../DatabaseAccess/DBConnection';
-import {logger} from '../helpers/Logger';
+import { logger } from '../helpers/Logger';
 import { analyzeProgress } from '../AnalyzeProgress/AnalyzeProgress';
 import ExplainQueriesDataStore from '../ExplainQueries/ExplainQueriesDataStore';
 import ProfileQueriesDataStore from '../ProfileQueries/ProfileQueriesDataStore';
@@ -36,57 +36,13 @@ class FilteredQueryDataStore {
    * and returns ready for insert query string
    * tuple fields: user_host - from original log, argument - field from original log, parametrized_query_id
    */
-  private convertTupleToQueryString = tuples => {
-    const queriesArray = tuples.map(
-      ({ user_host, argument, parametrized_query_id }) =>
-        `('${user_host}', '${argument}', ${parametrized_query_id})`
-    );
-
-    return queriesArray.join(', ');
-  };
-
-  /**
-   *
-   * @param connection - connection to tool database
-   * @param queries - filtered queries
-   * @param callback - return updated tuples with parametrized_queries_id for each tuple
-   * (if an error occurred during parsing using the 'node-sql-parser' library,
-   * then such tuple cancelled (= undefined))
-   *
-   * Callback from save method return query tuples with parametrized_query_id
-   */
-
-  // maybe better move to ParametrizedQueriesDataStore
-  private getParametrizedQueries({ connection, queries, callback }) {
-    const parametrizedQueriesDataStore = new ParametrizedQueriesDataStore();
-    const tuples = this.createQueriesTuple(queries);
-
-    tuples.forEach(async (tuple, index) => {
-      try {
-        const result = await parametrizedQueriesDataStore.save(
-          connection,
-          tuple
-        );
-
-        if (!result) {
-          tuples[index] = undefined;
-        } else {
-          const { insertId } = result;
-          tuples[index].parametrized_query_id = insertId;
-        }
-
-        const correctTuples = tuples.filter(t => t);
-
-        if (!correctTuples.find(t => !t.parametrized_query_id)) {
-          analyzeProgress.parametrizedQueriesInserted();
-          callback(correctTuples);
-        }
-      } catch (error) {
-        logger.logError(error);
-        connection.rollback();
-      }
-    });
-  }
+  private convertTupleToQueryString = tuples =>
+    tuples
+      .map(
+        ({ argument, parametrized_query_id }) =>
+          `('${argument}', ${parametrized_query_id})`
+      )
+      .join(', ');
 
   /**
    *
@@ -95,18 +51,42 @@ class FilteredQueryDataStore {
    */
   private retrieveOriginalQueriesByFilter(promisifyQuery) {
     return promisifyQuery(
-      'select user_host, argument from master.original_queries ' +
-        'where not exists ( ' +
-        'select 1 from master.filter ' +
-        'where ' +
-        "type = 'S' " +
-        'and filter_query = original_queries.argument ' +
-        'union ' +
-        'select 1 from master.filter ' +
-        'where ' +
-        "type = 'R' " +
-        'and original_queries.argument like filter_query);'
+      `select user_host, argument from master.original_queries
+       where not exists (
+         select 1 from master.filter
+            where type = 'S'
+            and filter_query = original_queries.argument
+         union
+            select 1 from master.filter
+            where type = 'R'
+         and original_queries.argument like filter_query);`
     );
+  }
+
+  private async insertFilteredQueries({ connection, values }) {
+    const promisifyQuery = promisify(connection.query).bind(connection);
+
+    connection.query('SET FOREIGN_KEY_CHECKS = 0;');
+
+    const insertQuery = `
+      insert into master.filtered_queries 
+        ( query_text, parametrized_query_id) 
+      values ${values}`;
+
+    try {
+      await promisifyQuery(insertQuery);
+      connection.query('SET FOREIGN_KEY_CHECKS = 1;');
+      analyzeProgress.filteredQueriesInserted();
+
+    } catch (insertError) {
+      analyzeProgress.handleErrorOnLogAnalyze(
+        'There was an error in analyzing the ' +
+          'general log during the inserting of filtered queries'
+      );
+
+      logger.logError(insertError);
+      connection.rollback();
+    }
   }
 
   /**
@@ -181,6 +161,7 @@ class FilteredQueryDataStore {
       },
     });
   }
+
   /**
    *
    * @param connection - connection to tool database
@@ -191,48 +172,32 @@ class FilteredQueryDataStore {
   // TODO: refactor this method
   async save(connection) {
     const promisifyQuery = promisify(connection.query).bind(connection);
+    const parametrizedQueriesDataStore = new ParametrizedQueriesDataStore();
 
     try {
-      const queries = await this.retrieveOriginalQueriesByFilter(promisifyQuery);
+      const queries = await this.retrieveOriginalQueriesByFilter(
+        promisifyQuery
+      );
 
       if (!queries.length) {
         return;
       }
 
-      this.getParametrizedQueries({
+      const tuples = this.createQueriesTuple(queries);
+
+      parametrizedQueriesDataStore.getParametrizedQueries({
         connection,
-        queries,
-        callback: async tuples => {
-          const values = this.convertTupleToQueryString(tuples);
+        tuples,
+        callback: async updatedTuples => {
+          const values = this.convertTupleToQueryString(updatedTuples);
+          await this.insertFilteredQueries({connection, values});
 
-          // TODO: try to remove this check
-
-          connection.query('SET FOREIGN_KEY_CHECKS = 0;');
-
-          const insertQuery = `
-            insert into master.filtered_queries (user_host, query_text, parametrized_query_id) values ${values}`;
+          parametrizedQueriesDataStore.saveUserHost({connection, tuples: updatedTuples});
 
           try {
-            await promisifyQuery(insertQuery);
-            connection.query('SET FOREIGN_KEY_CHECKS = 1;');
-            analyzeProgress.filteredQueriesInserted();
-
-          } catch (insertError) {
-            analyzeProgress.handleErrorOnLogAnalyze(
-              'There was an error in analyzing the general log during the inserting of filtered queries'
-            )
-            logger.logError(insertError);
-            connection.rollback();
-          }
-
-          try {
-            const filteredQueries = await this.getAllFilteredQueries(connection);
-
-            if (!filteredQueries.length) {
-              throw new Error(
-                'Filtered queries table does not include any data'
-              );
-            }
+            const filteredQueries = await this.getAllFilteredQueries(
+              connection
+            );
 
             await this.nextAnalyzeProcess({ connection, filteredQueries });
           } catch (e) {
