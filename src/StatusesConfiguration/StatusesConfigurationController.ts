@@ -32,15 +32,15 @@ export class StatusesConfigurationController {
     const configurationDataStore = new StatusesConfigurationDataStore();
     const statuses = req.body.statuses;
 
-    configurationDataStore.update(statuses, (data, err) => {
+    configurationDataStore.update(statuses, (isUpdateSuccess, err) => {
       if (err){
         res.status(500).send({
           message:
             err.message || 'Update status error'
         });
       }
-      else {
-        this.getAll(req, res)
+      else if (isUpdateSuccess) {
+        res.sendStatus(200);
       }
     })
   }

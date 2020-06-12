@@ -1,8 +1,8 @@
 import { MysqlError } from 'mysql';
-import {promisify} from 'util';
+import { promisify } from 'util';
 
 import DBConnection from '../DatabaseAccess/DBConnection';
-import {logger} from '../helpers/Logger';
+import { logger } from '../helpers/Logger';
 
 class StatusesConfigurationDataStore {
   /**
@@ -28,16 +28,16 @@ class StatusesConfigurationDataStore {
               where value = "${status.value}"
             `
           )
-            .then(updateResult => {
-              if (index === statuses.length - 1){
+            .then(() => {
+              if (index === statuses.length - 1) {
                 connection.commit();
                 connection.end();
-                callback(updateResult, undefined);
+                callback(true, undefined);
               }
             })
             .catch(updateError => {
               logger.logError(updateError);
-              callback(undefined, updateError);
+              callback(false, updateError);
               connection.rollback();
               connection.end();
             });
@@ -65,6 +65,7 @@ class StatusesConfigurationDataStore {
       [values],
       (error: MysqlError, result: any) => {
         if (result) {
+          connection.commit();
           callback(result, undefined);
         } else {
           logger.logError(error);
@@ -89,10 +90,10 @@ class StatusesConfigurationDataStore {
 
     promisifyQuery(statement)
       .then(result => {
+        connection.commit();
         callback(result, undefined)
       })
       .catch(removeError => {
-        console.log(removeError)
         callback(undefined, removeError.message)
       })
   }
