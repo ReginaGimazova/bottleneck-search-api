@@ -5,7 +5,7 @@ import databasePrepare from '../Initial/DatabasePrepare';
 
 export class ExplainQueriesController extends ControllerBase {
 
-  private getExplainInfo = async (req, res) => {
+  private getExplainInfoIfSuccess = async (req, res) => {
     const explainQueriesDataStore = new ExplainQueriesDataStore();
     const { page, limit, tables } = this.parseRequest(req);
 
@@ -39,7 +39,7 @@ export class ExplainQueriesController extends ControllerBase {
             'Error occurred on the server while receiving explain info data.',
         });
       else {
-        await this.getExplainInfo(req, res)
+        await this.getExplainInfoIfSuccess(req, res)
       }
     });
   }
@@ -60,7 +60,7 @@ export class ExplainQueriesController extends ControllerBase {
       },
     });
 
-    await this.getExplainInfo(req, res)
+    await this.getExplainInfoIfSuccess(req, res)
   };
 }
 

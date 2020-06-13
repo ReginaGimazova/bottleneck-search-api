@@ -117,6 +117,7 @@ class ExplainQueriesDataStore {
       .then(queries => {
         this.save({connection, prodConnection, queries, callback: (inserted => {
           if (inserted){
+            connection.commit();
             connection.end();
             prodConnection.end();
             explainResultCallback(

@@ -48,7 +48,6 @@ class DBConnection {
     const connection = createConnection({
       ...connectionConfig,
     });
-    connection.query('set autocommit=false');
     return connection;
   }
 }

@@ -5,6 +5,7 @@ import {logger} from '../helpers/Logger';
 import { analyzeProgress } from '../AnalyzeProgress/AnalyzeProgress';
 import DBConnection from '../DatabaseAccess/DBConnection';
 import StatusesConfigurationDataStore from '../StatusesConfiguration/StatusesConfigurationDataStore';
+import FilteredQueryDataStore from "../FilteredQueries/FilteredQueryDataStore";
 
 class ProfileQueriesDataStore {
   /**
@@ -46,10 +47,13 @@ class ProfileQueriesDataStore {
     const promisifyQuery = promisify(prodConnection.query).bind(prodConnection);
 
     tuples.forEach(async ({ query_text }, index) => {
+      const queryString = `
+        ${query_text}; 
+        show profile;
+      `;
+
       try {
-        const multipleQueryResult = await promisifyQuery(`
-          ${query_text}; 
-          show profile;`);
+        const multipleQueryResult = await promisifyQuery(queryString);
         tuples[index].result = multipleQueryResult[1];
 
         if (index === tuples.length - 1) {
@@ -84,15 +88,16 @@ class ProfileQueriesDataStore {
       callback: async updatedTuples => {
         const values = this.prepareInsertValues(updatedTuples);
 
-        const queryString = `insert into master.profile_replay_info
+        const queryString = `
+          insert into master.profile_replay_info
           (query_id, status, duration) values ${values}`;
 
         await promisifyProdQuery('set profiling = 0;');
 
         promisifyQuery(queryString)
           .then(() => {
-            callback(true);
             analyzeProgress.profileResultInserted();
+            callback(true);
           })
           .catch(insertError => {
             logger.logError(insertError.message);
@@ -103,7 +108,31 @@ class ProfileQueriesDataStore {
   }
 
   public updateProfileResult(profileResultCallback){
-    // TODO: complete, create common class for Explain and Profile
+    // TODO: create common class for Explain and Profile
+    const dbConnection = new DBConnection();
+    const connection = dbConnection.createToolConnection();
+    const prodConnection = dbConnection.createProdConnection();
+
+    const filteredQueryDataStore = new FilteredQueryDataStore();
+    filteredQueryDataStore
+      .getAllFilteredQueries(connection)
+      .then(async queries => {
+        await this.save({connection, prodConnection, queries, callback: (inserted => {
+          if (inserted){
+            connection.commit();
+            connection.end();
+            prodConnection.end();
+            profileResultCallback(
+              {status: inserted},
+              inserted ? undefined : new Error('There was an error in analyze queries by PROFILE'));
+          }
+          })});
+      })
+      .catch(error => {
+        logger.logError(error.message);
+        connection.end();
+        prodConnection.end();
+      })
   }
 
   /**
@@ -146,8 +175,6 @@ class ProfileQueriesDataStore {
       ${tables.length > 0 ? tablesJoinPart : ''}
       group by query_id;
     `;
-
-    // TODO: duplicates in statuses
 
     const withStatuses = `
       select

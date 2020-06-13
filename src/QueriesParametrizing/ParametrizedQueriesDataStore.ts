@@ -27,38 +27,6 @@ class ParametrizedQueriesDataStore {
     }
   }
 
-
-  /**
-   *
-   * @param connection
-   * @param tuples
-   */
-  public saveUserHost({connection, tuples}) {
-    const promisifyQuery = promisify(connection.query).bind(connection);
-
-    tuples.forEach(({user_host, parametrized_query_id}) => {
-      const insertHostString = `
-        insert into master.user_host (user_host) values ("${user_host}")
-      `;
-
-      promisifyQuery(insertHostString)
-        .then(async ({insertId}) => {
-          const insertRelation = `
-            insert into master.queries_to_user_host (parametrized_query_id, user_host_id)
-            values ("${parametrized_query_id}", "${insertId}")
-          `;
-
-          await promisifyQuery(insertRelation)
-
-        })
-        .catch((e) => {
-          logger.logError(e);
-          connection.rollback();
-        })
-    })
-  }
-
-
   save(connection: Connection, tuple) {
     const promisifyQuery = promisify(connection.query).bind(connection);
 

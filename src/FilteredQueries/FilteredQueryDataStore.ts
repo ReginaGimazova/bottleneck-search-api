@@ -7,6 +7,7 @@ import { logger } from '../helpers/Logger';
 import { analyzeProgress } from '../AnalyzeProgress/AnalyzeProgress';
 import ExplainQueriesDataStore from '../ExplainQueries/ExplainQueriesDataStore';
 import ProfileQueriesDataStore from '../ProfileQueries/ProfileQueriesDataStore';
+import UserHostDataStore from "../UserHostSaving/UserHostDataStore";
 
 class FilteredQueryDataStore {
   protected prodDbConnection() {
@@ -173,6 +174,7 @@ class FilteredQueryDataStore {
   async save(connection) {
     const promisifyQuery = promisify(connection.query).bind(connection);
     const parametrizedQueriesDataStore = new ParametrizedQueriesDataStore();
+    const userHostDataStore = new UserHostDataStore();
 
     try {
       const queries = await this.retrieveOriginalQueriesByFilter(
@@ -192,7 +194,7 @@ class FilteredQueryDataStore {
           const values = this.convertTupleToQueryString(updatedTuples);
           await this.insertFilteredQueries({connection, values});
 
-          parametrizedQueriesDataStore.saveUserHost({connection, tuples: updatedTuples});
+          userHostDataStore.saveUserHosts({connection, tuples: updatedTuples});
 
           try {
             const filteredQueries = await this.getAllFilteredQueries(

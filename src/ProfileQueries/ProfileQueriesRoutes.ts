@@ -1,5 +1,6 @@
 import * as express from 'express';
 import { profileQueriesController } from './ProfileQueriesController';
+import {Request, Response} from "express";
 
 class ProfileQueriesRoutes {
   public router: express.Router = express.Router();
@@ -9,9 +10,12 @@ class ProfileQueriesRoutes {
   }
 
   private config(): void {
-    this.router.get('/', (req: express.Request, res: express.Response) => {
-      profileQueriesController.getAll(req, res)
+    this.router.get('/', async (req: express.Request, res: express.Response) => {
+      await profileQueriesController.getAll(req, res)
     });
+    this.router.post('/update', async (req: Request, res: Response ) => {
+      await profileQueriesController.update(req, res);
+    })
   }
 }
 
