@@ -14,11 +14,16 @@ class StatusesConfigurationRoutes {
     );
 
     this.router.post('/', (req: express.Request, res: express.Response) =>
-      configurationController.save(req, res)
+      configurationController.update(req, res)
     );
 
     this.router.post('/new', (req: express.Request, res: express.Response) =>
-    configurationController.addStatus(req,res))
+      configurationController.addStatus(req, res)
+    );
+
+    this.router.post('/remove', (req: express.Request, res: express.Response) =>
+      configurationController.removeStatus(req, res)
+    )
   }
 }
 

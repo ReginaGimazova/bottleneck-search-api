@@ -2,15 +2,15 @@ import { Connection, MysqlError } from 'mysql';
 import sha from 'sha1';
 import { promisify } from 'util';
 
-import RejectedQueryDataStore from '../RejectedQueriesSaving/RejectedQueryDataStore';
+import {rejectedQueryDataStore} from '../RejectedQueriesSaving/RejectedQueryDataStore';
 import queryParametrizer from './queryParametrizer';
-import Logger from '../helpers/Logger';
+import {logger} from '../helpers/Logger';
 import DBConnection from '../DatabaseAccess/DBConnection';
+import {analyzeProgress} from "../AnalyzeProgress/AnalyzeProgress";
 
 class ParametrizedQueriesDataStore {
   private static parametrizeQuery({ argument, connection }) {
-    const rejectedQueryDataStore = new RejectedQueryDataStore();
-    const { query = '', error: parametrizeError = '' } = queryParametrizer(
+    const {query = '', error: parametrizeError = ''} = queryParametrizer(
       argument
     );
 
@@ -30,7 +30,7 @@ class ParametrizedQueriesDataStore {
   save(connection: Connection, tuple) {
     const promisifyQuery = promisify(connection.query).bind(connection);
 
-    const { argument, user_host } = tuple;
+    const { argument } = tuple;
     const query = ParametrizedQueriesDataStore.parametrizeQuery({
       argument,
       connection,
@@ -41,10 +41,10 @@ class ParametrizedQueriesDataStore {
     }
 
     const hash = sha(query);
-    const valuesTuple = `("${query}", "${hash}", "${user_host}", 1)`;
+    const valuesTuple = `("${query}", "${hash}", 1)`;
 
     const insertQuery = `
-        insert into master.parametrized_queries (parsed_query, parsed_query_hash, user_host, query_count) 
+        insert into master.parametrized_queries (parsed_query, parsed_query_hash, query_count) 
         values ${valuesTuple} 
         on duplicate key 
         update query_count = query_count + 1`;
@@ -52,50 +52,74 @@ class ParametrizedQueriesDataStore {
     return promisifyQuery(insertQuery);
   }
 
+  /**
+   *
+   * @param connection - connection to tool database
+   * @param tuples - created tuples from filtered queries
+   * @param callback - return updated tuples with parametrized_queries_id for each tuple
+   * (if an error occurred during parsing using the 'node-sql-parser' library,
+   * then such tuple cancelled (= undefined))
+   *
+   * Callback from save method return updated query tuples with parametrized_query_id
+   */
+
+  public getParametrizedQueries({ connection, tuples, callback }) {
+    tuples.forEach(async (tuple, index) => {
+      try {
+        const parametrizedQueryResult = await this.save(
+          connection,
+          tuple
+        );
+
+        if (!parametrizedQueryResult) {
+          tuples[index] = undefined;
+        } else {
+          const { insertId } = parametrizedQueryResult;
+          tuples[index].parametrized_query_id = insertId;
+        }
+
+        const correctTuples = tuples.filter(t => t);
+
+        if (!correctTuples.find(t => !t.parametrized_query_id)) {
+          analyzeProgress.parametrizedQueriesInserted();
+          callback(correctTuples);
+        }
+      } catch (error) {
+        logger.logError(error);
+        connection.rollback();
+      }
+    });
+  }
+
   getAll({ tables, byHost, callback }) {
-    const tablesToString =
-      tables.length > 0 ? tables.map(table => `"${table}"`).join(', ') : '';
-
-    const groupBySqlQueryString =
-      `select id, parsed_query, SUM(query_count) as query_count from master.parametrized_queries 
-       group by parsed_query_hash order by query_count desc;`;
-
-    const groupBySqlAndHostQueryString =
-      'select id, parsed_query, query_count from master.parametrized_queries order by query_count desc;';
-
-    const groupBySqlWithTables = `
-       select parametrized_queries.id, parsed_query, count(parametrized_queries.id) as query_count
-       from master.parametrized_queries
-       inner join filtered_queries fq on parametrized_queries.id = fq.parametrized_query_id
-       inner join queries_to_tables qtt on fq.id = qtt.query_id
-       inner join tables_statistic ts on qtt.table_id = ts.id and table_name in (${tablesToString})
-       group by  parsed_query_hash
-       order by query_count desc;
-    `;
-
-    const groupBySqlAndHostWithTables = `
-       select parametrized_queries.id, parsed_query, count(parametrized_queries.id) as query_count from 
-       ( select id from tables_statistic where table_name in (${tablesToString})) as tables 
-       inner join queries_to_tables on table_id = tables.id 
-       inner join filtered_queries on queries_to_tables.query_id = filtered_queries.id 
-       inner join parametrized_queries on filtered_queries.parametrized_query_id = parametrized_queries.id
-       group by  parsed_query_hash, parametrized_queries.user_host
-       order by query_count desc;`;
-
     const dbConnection = new DBConnection();
     const connection = dbConnection.createToolConnection();
-    const logger = new Logger();
 
-    let queryString = groupBySqlQueryString;
-    const searchQueriesWithTables = !!tables.length;
+    const searchTables =
+      tables.length > 0 ? tables.map(table => `"${table}"`).join(', ') : '';
 
-    if (byHost && !searchQueriesWithTables) {
-      queryString = groupBySqlAndHostQueryString;
-    } else if (byHost && searchQueriesWithTables) {
-      queryString = groupBySqlAndHostWithTables;
-    } else if (!byHost && searchQueriesWithTables) {
-      queryString = groupBySqlWithTables;
-    }
+    const tablesJoinPart = `
+      inner join filtered_queries on parametrized_queries.id = filtered_queries.parametrized_query_id
+      inner join queries_to_tables on filtered_queries.id = queries_to_tables.query_id
+      inner join tables_statistic
+        on queries_to_tables.table_id = tables_statistic.id
+        and json_search(json_array(${searchTables}), 'all', table_name) > 0
+    `;
+
+    const groupBySql =
+      `select id, parsed_query, query_count from master.parametrized_queries 
+       ${tables.length > 0 ? tablesJoinPart : ''}
+       order by query_count desc;`;
+
+    const groupBySqlAndHost = `
+      select parametrized_queries.id, parsed_query, query_count
+      from master.parametrized_queries
+      inner join master.queries_to_user_host on parametrized_queries.id = queries_to_user_host.parametrized_query_id
+      inner join master.user_host on queries_to_user_host.user_host_id = user_host.id
+      ${tables.length > 0 ? tablesJoinPart : ''}
+      group by parsed_query_hash;`;
+
+    const queryString = byHost ? groupBySqlAndHost : groupBySql;
 
     connection.query(queryString, (err: MysqlError, result: any) => {
       if (result) {

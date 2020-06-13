@@ -1,5 +1,14 @@
 import { Parser } from 'node-sql-parser';
 
+/**
+ *
+ * @param query - insert query from general log file
+ * In this method I change table_name and database_name to this tool table and database names
+ * Then return custom insert query
+ *
+ * (for improve it's better to read log file part by part)
+ */
+
 const DBNameReplacer = (query: string) => {
   const parser = new Parser();
 

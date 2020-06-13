@@ -1,7 +1,8 @@
 import SimpleLogger from 'simple-node-logger';
 
+// change to Singleton
 class Logger {
-  public logger;
+  public settings;
 
   constructor() {
     const opts = {
@@ -9,17 +10,17 @@ class Logger {
       timestampFormat: 'YYYY-MM-DD HH:mm:ss.SSS',
     };
 
-    this.logger = SimpleLogger.createSimpleLogger(opts)
+    this.settings = SimpleLogger.createSimpleLogger(opts)
   }
 
   setLevel(level){
-    this.logger.setLevel(level)
+    this.settings.setLevel(level)
   }
 
   logError(errorMessage: string){
-    this.logger.setLevel('error')
-    this.logger.error(errorMessage)
+    this.settings.setLevel('error')
+    this.settings.error(errorMessage)
   }
 }
 
-export default Logger;
+export const logger = new Logger();

@@ -26,19 +26,29 @@ const prodConnectionConfig = {
   user: PROD_DB_USER,
   password: PROD_DB_PASSWORD,
   database: PROD_DATABASE,
+  multipleStatements: true
 };
+
+/**
+ * prodConnectionConfig - connection config to database with original tables on production server
+ * connectionConfig - connection config to the database of this tool
+ */
 
 class DBConnection {
   createProdConnection(): Connection {
-    return createConnection({
+    const connection = createConnection({
       ...prodConnectionConfig,
     });
+
+    connection.query('set autocommit=false');
+    return connection;
   }
 
   createToolConnection(): Connection {
-    return createConnection({
+    const connection = createConnection({
       ...connectionConfig,
     });
+    return connection;
   }
 }
 

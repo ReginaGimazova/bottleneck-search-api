@@ -1,8 +1,8 @@
-import Logger from '../helpers/Logger';
+import {logger} from '../helpers/Logger';
 
+// TODO: maybe better to create singleton
 class RejectedQueryDataStore {
   save({ connection, errorText = '', rejectedQuery = '', type = '' }) {
-    const logger = new Logger();
 
     const insertQuery =
       `insert into master.rejected_original_queries (error_text, query_text, type)
@@ -19,4 +19,4 @@ class RejectedQueryDataStore {
   }
 }
 
-export default RejectedQueryDataStore;
+export const rejectedQueryDataStore = new RejectedQueryDataStore();

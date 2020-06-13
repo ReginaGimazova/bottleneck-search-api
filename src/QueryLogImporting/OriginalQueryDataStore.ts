@@ -4,7 +4,7 @@ require('dotenv').config()
 
 import DBNameReplacer from './DBNameReplacer';
 import DBConnection from '../DatabaseAccess/DBConnection';
-import Logger from '../helpers/Logger';
+import {logger} from '../helpers/Logger';
 import FilteredQueryDataStore from '../FilteredQueries/FilteredQueryDataStore';
 import {analyzeProgress} from "../AnalyzeProgress/AnalyzeProgress";
 
@@ -15,7 +15,6 @@ class OriginalQueryDataStore {
   save(): void {
     const dbConnection = new DBConnection();
     const connection = dbConnection.createToolConnection();
-    const logger = new Logger();
 
     const filteredQueryDataStore = new FilteredQueryDataStore();
 
@@ -24,12 +23,11 @@ class OriginalQueryDataStore {
     connection.beginTransaction((error) => {
       if (error) {
         logger.logError(error);
-        throw error;
       }
 
       connection.query(queryToSave, async (err, result) => {
         if (err) {
-          logger.logError(err + ' Query Log importing error ');
+          logger.logError('Query Log importing error: ' + err);
           connection.rollback();
         } else if (result) {
           analyzeProgress.queryLogInserted();

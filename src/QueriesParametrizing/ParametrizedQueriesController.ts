@@ -1,31 +1,41 @@
 import { Request, Response } from 'express';
 import ParametrizedQueriesDataStore from './ParametrizedQueriesDataStore';
+import ControllerBase from '../helpers/ControllerBase';
+import {checkTableInDatabase} from "../helpers/CheckTableInDatabase";
 
-export class ParametrizedQueriesController {
+export class ParametrizedQueriesController extends ControllerBase {
   public getQueries(req: Request, res: Response) {
     const parametrizedQueriesDataStore = new ParametrizedQueriesDataStore();
-    const byHost = JSON.parse(req.query.host);
-    const tables = JSON.parse(req.query.search_tables);
-    let page = JSON.parse(req.query.page);
 
-    const limit = 10;
+    const {byHost, limit, page = 1, tables} = this.parseRequest(req);
+
+    checkTableInDatabase.checkTable({
+      tableName: 'parametrized_queries',
+      callbackCheckTable: existCheckResult => {
+        if (!existCheckResult) {
+          res.status(200).send({
+            page: 0,
+            page_count: 0,
+            queries: [],
+          });
+
+          return;
+        }
+      },
+    });
 
     parametrizedQueriesDataStore.getAll({byHost, tables: tables || [], callback: (data, err) => {
       if (err)
         res.status(404).send({
           message:
             err.message ||
-            'Server error occurred while retrieving parametrized queries.',
+            'Server error occurred while receiving parametrized queries.',
         });
       else {
         const pageCount = Math.ceil(data.length / 10);
-        // tslint:disable-next-line:radix
-        if (!page) { page = 1;}
-        if (page > pageCount) {
-          page = pageCount
-        }
+
         res.status(200).send({
-          page,
+          page: page > pageCount ? pageCount : page,
           page_count: pageCount,
           queries: data.slice(page * limit - limit, page * limit)
         });

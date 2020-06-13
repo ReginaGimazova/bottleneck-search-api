@@ -1,80 +1,145 @@
 import { MysqlError } from 'mysql';
+import { promisify } from 'util';
 
 import DBConnection from '../DatabaseAccess/DBConnection';
-import Logger from '../helpers/Logger';
-import {promisify} from "util";
+import { logger } from '../helpers/Logger';
 
 class StatusesConfigurationDataStore {
-  save(statusesId = [], callback){
+  /**
+   *
+   * @param statuses - all statuses from FE, which containt statuses with updated modes
+   * @param callback - return updated statuses
+   */
+  update(statuses = [], callback) {
     const dbConnection = new DBConnection();
     const connection = dbConnection.createToolConnection();
-    const logger = new Logger();
+    const promisifyQuery = promisify(connection.query).bind(connection);
 
-    connection.query(`
-      update statuses_configuration 
-      set status = 
-        IF (
-          find_in_set (id, "${statusesId.join(', ')}") > 0,
-        1, 0);`,
-
-      (err: MysqlError, result: any) => {
-      if (result) {
-        callback(result, undefined);
-      }
-      if (err) {
-        logger.logError(err);
-        callback(undefined, err);
+    connection.beginTransaction(error => {
+      if (error) {
+        logger.logError(error);
+        connection.end();
+      } else {
+        statuses.forEach((status, index) => {
+          promisifyQuery(
+            `
+              update statuses_configuration
+              set mode = "${status.mode}"
+              where value = "${status.value}"
+            `
+          )
+            .then(() => {
+              if (index === statuses.length - 1) {
+                connection.commit();
+                connection.end();
+                callback(true, undefined);
+              }
+            })
+            .catch(updateError => {
+              logger.logError(updateError);
+              callback(false, updateError);
+              connection.rollback();
+              connection.end();
+            });
+        });
       }
     });
-    connection.end();
   }
 
-  addStatus(newStatusData, callback){
+  /**
+   *
+   * @param newStatusData - new configuration status which contains value, type: Explain or Profile and mode
+   * @param callback - return error or success insert message
+   */
+  addStatus(newStatusData, callback) {
     const dbConnection = new DBConnection();
     const connection = dbConnection.createToolConnection();
-    const logger = new Logger();
 
-    const {status, value, type} = newStatusData;
-    const queryString = 'insert into statuses_configuration (value, type, status) values ?'
-    const values = [[`${value}`, `${type.toUpperCase()}`, `${status}`]];
+    const { mode, value, type } = newStatusData;
+    const queryString =
+      'insert into statuses_configuration (value, type, mode) values ?';
+    const values = [[`${value}`, `${type.toUpperCase()}`, `${mode}`]];
 
-    connection.query(queryString, [values],
-      (error: MysqlError, result: any ) => {
-        if (result){
-          callback(result, undefined)
+    connection.query(
+      queryString,
+      [values],
+      (error: MysqlError, result: any) => {
+        if (result) {
+          connection.commit();
+          callback(result, undefined);
         } else {
           logger.logError(error);
-          callback(undefined, error)
+          callback(undefined, error);
         }
+      }
+    );
+  }
+
+  /**
+   *
+   * @param statusValue - value of status which must be removed
+   * @param callback - return error or success removing message
+   */
+  removeStatus(statusValue, callback) {
+    const dbConnection = new DBConnection();
+    const connection = dbConnection.createToolConnection();
+    const promisifyQuery = promisify(connection.query).bind(connection);
+    const { value, type } = statusValue;
+
+    const statement = `delete from statuses_configuration where value = "${value}" and type = "${type}"`;
+
+    promisifyQuery(statement)
+      .then(result => {
+        connection.commit();
+        callback(result, undefined)
+      })
+      .catch(removeError => {
+        callback(undefined, removeError.message)
       })
   }
 
-  async checkStatusesConfigExist({connection, logger, type, callbackCountOfStatuses}){
+  /**
+   *
+   * @param connection - tool connection
+   * @param type - type of configuration status: Explain or Profile
+   * @param callbackCountOfStatuses - callback which returns count of statuses for this type
+   */
+  async checkStatusesConfigExist({
+    connection,
+    type,
+    callbackCountOfStatuses,
+  }) {
     const promisifyQuery = promisify(connection.query).bind(connection);
 
-    const query = `select count(id) as count from master.statuses_configuration where status = 1 and type = "${type}";`
+    const query = `select count(id) as count from master.statuses_configuration where mode = 1 and type = "${type}";`;
     try {
       const result = await promisifyQuery(query);
-      callbackCountOfStatuses(result[0].count)
+      callbackCountOfStatuses(result[0].count);
     } catch (e) {
       logger.logError(e);
     }
   }
 
+  /**
+   *
+   * @param callback - return all status configurations
+   */
   getAll(callback) {
     const dbConnection = new DBConnection();
     const connection = dbConnection.createToolConnection();
-    const logger = new Logger();
 
-    connection.query('select id, value, type, status from master.statuses_configuration;', (err: MysqlError, result: any) => {
-      if (result) {
-        callback(result, undefined);
+    connection.query(
+      'select id, value, type, mode from master.statuses_configuration;',
+      (err: MysqlError, result: any) => {
+        if (result) {
+          callback(result, undefined);
+        }
+        if (err) {
+          logger.logError(err);
+          callback(undefined, err);
+        }
       }
-      if (err) {
-        logger.logError(err);
-        callback(undefined, err);
-      }
-    });
+    );
     connection.end();
   }
 }

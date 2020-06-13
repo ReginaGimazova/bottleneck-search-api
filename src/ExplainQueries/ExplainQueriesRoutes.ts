@@ -1,17 +1,21 @@
-import * as express from 'express';
+import {Response, Request, Router} from 'express';
 import { explainQueriesController } from './ExplainQueriesController';
 
 class ExplainQueriesRoutes {
-  public router: express.Router = express.Router();
+  public router: Router = Router();
 
   constructor() {
     this.config();
   }
 
   private config(): void {
-    this.router.get('/', (req: express.Request, res: express.Response) => {
-      explainQueriesController.getAll(req, res)
+    this.router.get('/', async (req: Request, res: Response) => {
+      await explainQueriesController.getAll(req, res);
     });
+
+    this.router.post('/update', async (req: Request, res: Response ) => {
+      await explainQueriesController.update(req, res);
+    })
   }
 }
 
