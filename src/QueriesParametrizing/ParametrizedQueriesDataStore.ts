@@ -1,16 +1,16 @@
-import { Connection, MysqlError } from 'mysql';
+import { MysqlError } from 'mysql';
 import sha from 'sha1';
 import { promisify } from 'util';
 
-import {rejectedQueryDataStore} from '../RejectedQueriesSaving/RejectedQueryDataStore';
+import { rejectedQueryDataStore } from '../RejectedQueriesSaving/RejectedQueryDataStore';
 import queryParametrizer from './queryParametrizer';
-import {logger} from '../helpers/Logger';
+import { logger } from '../helpers/Logger';
 import DBConnection from '../DatabaseAccess/DBConnection';
-import {analyzeProgress} from "../AnalyzeProgress/AnalyzeProgress";
+import { analyzeProgress } from '../AnalyzeProgress/AnalyzeProgress';
 
 class ParametrizedQueriesDataStore {
-  private static parametrizeQuery({ argument, connection }) {
-    const {query = '', error: parametrizeError = ''} = queryParametrizer(
+  private parametrizeQuery({ argument, connection }) {
+    const { query = '', error: parametrizeError = '' } = queryParametrizer(
       argument
     );
 
@@ -27,11 +27,63 @@ class ParametrizedQueriesDataStore {
     }
   }
 
-  save(connection: Connection, tuple) {
+  private clearTuples = (tuples) => {
+    const correctTuples = tuples
+      .filter(tuple => tuple)
+
+    for (const tuple1 of correctTuples){
+      for (const tuple2 of correctTuples){
+        if (tuple1.parametrized_query_hash === tuples.parametrized_query_hash){
+          tuple1.parametrized_query_id = tuple1.parametrized_query_id || tuple2.parametrized_query_id;
+          tuple2.parametrized_query_id = tuple2.parametrized_query_id || tuple1.parametrized_query_id;
+        }
+      }
+    }
+
+    return correctTuples;
+  };
+
+  /*/!**
+   *
+   * @param connection
+   * @param argument
+   * @param callbackResult
+   *!/
+  private checkParamQueryExist({ connection, argument, callbackResult }) {
+    const hash = sha(argument);
+
+    const selectString = `
+      select id from master.parametrized_queries
+      where parsed_query_hash = "${hash}"
+    `;
+
+    const promisifyQuery = promisify(connection.query).bind(connection);
+
+    promisifyQuery(selectString)
+      .then(result => {
+        if (result.length > 0) {
+          callbackResult(result[0].id);
+        } else {
+          callbackResult(undefined);
+        }
+      })
+      .catch(e => {
+        logger.logError(e);
+        connection.rollback();
+      });
+
+  }
+*/
+  /**
+   *
+   * @param connection
+   * @param tuple
+   */
+  save(connection, tuple) {
     const promisifyQuery = promisify(connection.query).bind(connection);
 
     const { argument } = tuple;
-    const query = ParametrizedQueriesDataStore.parametrizeQuery({
+    const query = this.parametrizeQuery({
       argument,
       connection,
     });
@@ -41,13 +93,12 @@ class ParametrizedQueriesDataStore {
     }
 
     const hash = sha(query);
-    const valuesTuple = `("${query}", "${hash}", 1)`;
 
     const insertQuery = `
-        insert into master.parametrized_queries (parsed_query, parsed_query_hash, query_count) 
-        values ${valuesTuple} 
-        on duplicate key 
-        update query_count = query_count + 1`;
+      insert into master.parametrized_queries (parsed_query, parsed_query_hash) 
+      values ("${query}", "${hash}")
+      on duplicate key update parsed_query=parsed_query
+    `;
 
     return promisifyQuery(insertQuery);
   }
@@ -75,12 +126,15 @@ class ParametrizedQueriesDataStore {
           tuples[index] = undefined;
         } else {
           const { insertId } = parametrizedQueryResult;
+          const hash = sha(tuple.argument);
+
           tuples[index].parametrized_query_id = insertId;
+          tuples[index].parsed_query_hash = hash
         }
 
-        const correctTuples = tuples.filter(t => t);
+        const correctTuples = this.clearTuples(tuples);
 
-        if (!correctTuples.find(t => !t.parametrized_query_id)) {
+        if (index === tuples.length - 1) {
           analyzeProgress.parametrizedQueriesInserted();
           callback(correctTuples);
         }
@@ -106,13 +160,12 @@ class ParametrizedQueriesDataStore {
         and json_search(json_array(${searchTables}), 'all', table_name) > 0
     `;
 
-    const groupBySql =
-      `select id, parsed_query, query_count from master.parametrized_queries 
+    const groupBySql = `select id, parsed_query from master.parametrized_queries 
        ${tables.length > 0 ? tablesJoinPart : ''}
-       order by query_count desc;`;
+      `;
 
     const groupBySqlAndHost = `
-      select parametrized_queries.id, parsed_query, query_count
+      select parametrized_queries.id, parsed_query
       from master.parametrized_queries
       inner join master.queries_to_user_host on parametrized_queries.id = queries_to_user_host.parametrized_query_id
       inner join master.user_host on queries_to_user_host.user_host_id = user_host.id

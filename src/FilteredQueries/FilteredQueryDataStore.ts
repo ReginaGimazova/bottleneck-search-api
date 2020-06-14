@@ -7,7 +7,7 @@ import { logger } from '../helpers/Logger';
 import { analyzeProgress } from '../AnalyzeProgress/AnalyzeProgress';
 import ExplainQueriesDataStore from '../ExplainQueries/ExplainQueriesDataStore';
 import ProfileQueriesDataStore from '../ProfileQueries/ProfileQueriesDataStore';
-import UserHostDataStore from "../UserHostSaving/UserHostDataStore";
+import UserHostDataStore from '../UserHostSaving/UserHostDataStore';
 
 class FilteredQueryDataStore {
   protected prodDbConnection() {
@@ -27,6 +27,7 @@ class FilteredQueryDataStore {
         user_host: item.user_host,
         argument: item.argument,
         parametrized_query_id: undefined,
+        parsed_query_hash: ''
       };
     });
   }

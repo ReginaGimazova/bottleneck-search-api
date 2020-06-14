@@ -18,12 +18,13 @@ class UserHostDataStore {
       });
     });
 
-
-    const values = hostQueryRelation.map(({parametrized_query_id, id}) => [`${parametrized_query_id}`, `${id}`])
+    const values = hostQueryRelation.map(({parametrized_query_id, id}) => [`${parametrized_query_id}`, `${id}`, 1])
 
     const insertRelation = `
-      insert into master.queries_to_user_host (parametrized_query_id, user_host_id)
+      insert into master.queries_to_user_host (parametrized_query_id, user_host_id, query_count)
       values ?
+      on duplicate key
+      update query_count = query_count + 1
     `;
 
     promisifyQuery(insertRelation, [values]).catch(error => {
@@ -76,7 +77,6 @@ class UserHostDataStore {
           }
         })
         .catch(e => {
-          console.log(e);
           logger.logError(e);
           connection.rollback();
         });

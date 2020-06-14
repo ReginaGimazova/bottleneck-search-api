@@ -163,7 +163,7 @@ class ExplainQueriesDataStore {
     `;
 
     const withStatuses = `
-      select explain_info as critical_statuses, parametrized_queries.query_count, parametrized_queries.parsed_query
+      select explain_info as critical_statuses, parametrized_queries.parsed_query
       from (
         select
           query_id,
@@ -180,7 +180,7 @@ class ExplainQueriesDataStore {
     `;
 
     const withoutStatuses = `
-      select explain_info as critical_statuses, parametrized_queries.query_count, parametrized_queries.parsed_query
+      select explain_info as critical_statuses, parametrized_queries.parsed_query
       from (
          select
            query_id,

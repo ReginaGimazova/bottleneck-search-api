@@ -162,8 +162,7 @@ class ProfileQueriesDataStore {
     const withoutStatuses = `
       select
         json_unquote(json_arrayagg(json_object('status', replay_info.status, 'duration', replay_info.duration))) critical_statuses,
-        parametrized_queries.parsed_query,
-        parametrized_queries.query_count
+        parametrized_queries.parsed_query
       from (
         select
            query_id,
@@ -184,8 +183,7 @@ class ProfileQueriesDataStore {
             'duration', profile_replay_info.duration
           )
         ) critical_statuses,
-        parametrized_queries.parsed_query,
-        parametrized_queries.query_count
+        parametrized_queries.parsed_query
       from
         parametrized_queries
         inner join filtered_queries on filtered_queries.parametrized_query_id = parametrized_queries.id
