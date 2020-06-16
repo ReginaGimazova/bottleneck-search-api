@@ -162,7 +162,8 @@ class ProfileQueriesDataStore {
     const withoutStatuses = `
       select
         json_unquote(json_arrayagg(json_object('status', replay_info.status, 'duration', replay_info.duration))) critical_statuses,
-        parametrized_queries.parsed_query
+        parametrized_queries.parsed_query,
+        queries_to_user_host.query_count
       from (
         select
            query_id,
@@ -171,8 +172,15 @@ class ProfileQueriesDataStore {
         from profile_replay_info)
         as replay_info
       inner join parametrized_queries on replay_info.query_id = parametrized_queries.id
+      inner join (
+        select
+          parametrized_query_id,
+          sum(query_count) as query_count
+      from master.queries_to_user_host
+      group by parametrized_query_id) as queries_to_user_host
+      on parametrized_queries.id = queries_to_user_host.parametrized_query_id
       ${tables.length > 0 ? tablesJoinPart : ''}
-      group by query_id;
+      group by parametrized_queries.parsed_query_hash;
     `;
 
     const withStatuses = `
@@ -183,12 +191,20 @@ class ProfileQueriesDataStore {
             'duration', profile_replay_info.duration
           )
         ) critical_statuses,
-        parametrized_queries.parsed_query
+        parametrized_queries.parsed_query,
+        queries_to_user_host.query_count
       from
         parametrized_queries
         inner join filtered_queries on filtered_queries.parametrized_query_id = parametrized_queries.id
         inner join profile_replay_info on filtered_queries.id = profile_replay_info.query_id
         inner join statuses_configuration on statuses_configuration.value = profile_replay_info.status
+        inner join (
+          select
+            parametrized_query_id,
+            sum(query_count) as query_count
+          from master.queries_to_user_host
+          group by parametrized_query_id) as queries_to_user_host
+        on parametrized_queries.id = queries_to_user_host.parametrized_query_id
         ${tables.length > 0 ? tablesJoinPart : ''}
       where statuses_configuration.mode = true and type = 'PROFILE'
       group by parametrized_queries.parsed_query_hash;

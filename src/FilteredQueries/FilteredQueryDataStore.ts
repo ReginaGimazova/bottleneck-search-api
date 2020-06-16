@@ -186,29 +186,27 @@ class FilteredQueryDataStore {
         return;
       }
 
-      const tuples = this.createQueriesTuple(queries);
+      const filteredQueriesTuples = this.createQueriesTuple(queries);
 
       const updatedTuples = await parametrizedQueriesDataStore.getParametrizedQueries({
         connection,
-        tuples,
+        filteredQueriesTuples,
       });
-          /*const values = this.convertTupleToQueryString(updatedTuples);
-          await this.insertFilteredQueries({connection, values});
+      const values = this.convertTupleToQueryString(updatedTuples);
+      await this.insertFilteredQueries({connection, values});
 
-          userHostDataStore.saveUserHosts({connection, tuples: updatedTuples});
+      userHostDataStore.saveUserHosts({connection, tuples: updatedTuples});
 
-          try {
-            const filteredQueries = await this.getAllFilteredQueries(
-              connection
-            );
+      try {
+        const filteredQueries = await this.getAllFilteredQueries(
+          connection
+        );
 
-            await this.nextAnalyzeProcess({ connection, filteredQueries });
-          } catch (e) {
-            logger.logError(e);
-            connection.rollback();
-          }*/
-
-
+        await this.nextAnalyzeProcess({ connection, filteredQueries });
+      } catch (e) {
+        logger.logError(e);
+        connection.rollback();
+      }
     } catch (queriesError) {
       connection.rollback();
       logger.logError(queriesError);
