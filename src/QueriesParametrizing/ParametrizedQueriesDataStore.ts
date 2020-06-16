@@ -79,7 +79,6 @@ class ParametrizedQueriesDataStore {
    *
    * @param connection - connection to tool database
    * @param tuples - created tuples from filtered queries
-   * @param callback - return updated tuples with parametrized_queries_id for each tuple
    * (if an error occurred during parsing using the 'node-sql-parser' library,
    * then such tuple cancelled (= undefined))
    *
@@ -130,26 +129,42 @@ class ParametrizedQueriesDataStore {
       tables.length > 0 ? tables.map(table => `"${table}"`).join(', ') : '';
 
     const tablesJoinPart = `
-      inner join filtered_queries on parametrized_queries.id = filtered_queries.parametrized_query_id
-      inner join queries_to_tables on filtered_queries.id = queries_to_tables.query_id
-      inner join tables_statistic
-        on queries_to_tables.table_id = tables_statistic.id
-        and json_search(json_array(${searchTables}), 'all', table_name) > 0
+      inner join (
+        select parametrized_query_id
+        from filtered_queries
+        inner join queries_to_tables on filtered_queries.id = queries_to_tables.query_id
+        inner join tables_statistic
+          on queries_to_tables.table_id = tables_statistic.id
+          and json_search(json_array(${searchTables}), 'all', table_name) > 0
+        group by parametrized_query_id) as filtered_by_tables
+        on filtered_by_tables.parametrized_query_id
     `;
 
     const groupBySql = `
-      select parametrized_queries.id, parsed_query, sum(queries_to_user_host.query_count) as query_count
+      select parametrized_queries.id, parsed_query, queries_to_user_host.query_count
       from master.parametrized_queries
-      inner join master.queries_to_user_host on parametrized_queries.id = queries_to_user_host.parametrized_query_id
-      ${tables.length > 0 ? tablesJoinPart : ''}
-      group by parsed_query_hash;
+      inner join (
+        select
+          parametrized_query_id,
+          sum(query_count) query_count
+        from master.queries_to_user_host
+        group by parametrized_query_id) as queries_to_user_host
+      on parametrized_queries.id = queries_to_user_host.parametrized_query_id
+      ${tables.length > 0 ? tablesJoinPart : ''};
     `;
 
     const groupBySqlAndHost = `
       select parametrized_queries.id, parsed_query, queries_to_user_host.query_count
       from master.parametrized_queries
-      inner join master.queries_to_user_host on parametrized_queries.id = queries_to_user_host.parametrized_query_id
-      inner join master.user_host on queries_to_user_host.user_host_id = user_host.id
+      inner join (
+        select
+          user_host_id,
+          parametrized_query_id,
+          sum(query_count) query_count
+        from master.queries_to_user_host
+        group by parametrized_query_id, user_host_id) as queries_to_user_host
+      on parametrized_queries.id = queries_to_user_host.parametrized_query_id
+      inner join master.user_host on user_host.id = queries_to_user_host.user_host_id
       ${tables.length > 0 ? tablesJoinPart : ''}
     `;
 
