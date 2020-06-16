@@ -24,7 +24,6 @@
     "express": "^4.17.1",
     "express-paginate": "^1.0.0",
     "helmet": "^3.21.2",
-    "js-sql-parser": "^1.2.1",
     "mysql": "^2.14.1",
     "node-sql-parser": "^1.7.4",
     "sha1": "^1.1.1",
