@@ -188,11 +188,11 @@ class FilteredQueryDataStore {
 
       const tuples = this.createQueriesTuple(queries);
 
-      parametrizedQueriesDataStore.getParametrizedQueries({
+      const updatedTuples = await parametrizedQueriesDataStore.getParametrizedQueries({
         connection,
         tuples,
-        callback: async updatedTuples => {
-          const values = this.convertTupleToQueryString(updatedTuples);
+      });
+          /*const values = this.convertTupleToQueryString(updatedTuples);
           await this.insertFilteredQueries({connection, values});
 
           userHostDataStore.saveUserHosts({connection, tuples: updatedTuples});
@@ -206,9 +206,9 @@ class FilteredQueryDataStore {
           } catch (e) {
             logger.logError(e);
             connection.rollback();
-          }
-        },
-      });
+          }*/
+
+
     } catch (queriesError) {
       connection.rollback();
       logger.logError(queriesError);

@@ -122,7 +122,7 @@ class TablesStatisticDataStore {
         table_ids.add(insertId);
 
         if (index === tableNames.length - 1) {
-          callbackTuple(tuple);
+          return callbackTuple(tuple);
         }
       } catch (insertTableError) {
         logger.logError(insertTableError);
@@ -165,7 +165,7 @@ class TablesStatisticDataStore {
           tuples[index] = updatedTuple;
           if (isThroughFinalQuery){
             await this.saveQueryToTablesRelation({connection, tuples});
-            callback(true)
+            return callback(true)
           }
         },
       });

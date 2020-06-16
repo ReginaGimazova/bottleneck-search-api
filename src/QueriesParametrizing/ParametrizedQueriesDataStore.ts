@@ -27,59 +27,12 @@ class ParametrizedQueriesDataStore {
     }
   }
 
-  private clearTuples = (tuples) => {
-    const correctTuples = tuples
-      .filter(tuple => tuple)
-
-    for (const tuple1 of correctTuples){
-      for (const tuple2 of correctTuples){
-        if (tuple1.parametrized_query_hash === tuples.parametrized_query_hash){
-          tuple1.parametrized_query_id = tuple1.parametrized_query_id || tuple2.parametrized_query_id;
-          tuple2.parametrized_query_id = tuple2.parametrized_query_id || tuple1.parametrized_query_id;
-        }
-      }
-    }
-
-    return correctTuples;
-  };
-
-  /*/!**
-   *
-   * @param connection
-   * @param argument
-   * @param callbackResult
-   *!/
-  private checkParamQueryExist({ connection, argument, callbackResult }) {
-    const hash = sha(argument);
-
-    const selectString = `
-      select id from master.parametrized_queries
-      where parsed_query_hash = "${hash}"
-    `;
-
-    const promisifyQuery = promisify(connection.query).bind(connection);
-
-    promisifyQuery(selectString)
-      .then(result => {
-        if (result.length > 0) {
-          callbackResult(result[0].id);
-        } else {
-          callbackResult(undefined);
-        }
-      })
-      .catch(e => {
-        logger.logError(e);
-        connection.rollback();
-      });
-
-  }
-*/
   /**
    *
    * @param connection
    * @param tuple
    */
-  save(connection, tuple) {
+  async save(connection, tuple) {
     const promisifyQuery = promisify(connection.query).bind(connection);
 
     const { argument } = tuple;
@@ -97,10 +50,42 @@ class ParametrizedQueriesDataStore {
     const insertQuery = `
       insert into master.parametrized_queries (parsed_query, parsed_query_hash) 
       values ("${query}", "${hash}")
-      on duplicate key update parsed_query=parsed_query
     `;
 
-    return promisifyQuery(insertQuery);
+    try {
+      const result = await promisifyQuery(insertQuery);
+      if (result.insertId) {
+        return result.insertId;
+      }
+    } catch (e) {
+      logger.logError(e);
+    }
+  }
+
+  /**
+   *
+   * @param connection
+   * @param argument
+   */
+  private async returnIdOrInsert({ connection, tuple }) {
+    const hash = sha(tuple.argument);
+
+    const selectString = `
+      select id from master.parametrized_queries
+      where parsed_query_hash = "${hash}"
+    `;
+
+    const promisifyQuery = promisify(connection.query).bind(connection);
+
+    try {
+      const result = await promisifyQuery(selectString);
+      if (result.length !== 0) {
+        return result[0].id;
+      }
+    } catch (e) {
+      logger.logError(e);
+      connection.rollback();
+    }
   }
 
   /**
@@ -114,35 +99,28 @@ class ParametrizedQueriesDataStore {
    * Callback from save method return updated query tuples with parametrized_query_id
    */
 
-  public getParametrizedQueries({ connection, tuples, callback }) {
-    tuples.forEach(async (tuple, index) => {
-      try {
-        const parametrizedQueryResult = await this.save(
-          connection,
-          tuple
-        );
+  public async getParametrizedQueries({ connection, tuples }) {
+    for (let index = 0; index < tuples.length; index++) {
+      let id;
+      const tuple = tuples[index];
 
-        if (!parametrizedQueryResult) {
-          tuples[index] = undefined;
-        } else {
-          const { insertId } = parametrizedQueryResult;
-          const hash = sha(tuple.argument);
+      id = await this.returnIdOrInsert({
+        connection,
+        tuple,
+      });
 
-          tuples[index].parametrized_query_id = insertId;
-          tuples[index].parsed_query_hash = hash
-        }
-
-        const correctTuples = this.clearTuples(tuples);
-
-        if (index === tuples.length - 1) {
-          analyzeProgress.parametrizedQueriesInserted();
-          callback(correctTuples);
-        }
-      } catch (error) {
-        logger.logError(error);
-        connection.rollback();
+      if (!id) {
+        id = await this.save(connection, tuple);
       }
-    });
+
+      tuple.parametrized_query_id = id;
+      const correctTuples = tuples.filter(value => value);
+
+      if (index === tuples.length - 1) {
+        analyzeProgress.parametrizedQueriesInserted();
+        return correctTuples;
+      }
+    }
   }
 
   getAll({ tables, byHost, callback }) {

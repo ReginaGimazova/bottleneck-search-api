@@ -54,7 +54,7 @@ class ExplainQueriesDataStore {
         tuples[index].result = JSON.stringify(analyzeResult[0]);
 
         if (index === tuples.length - 1) {
-          callback(tuples);
+          return callback(tuples);
         }
       } catch (e) {
         rejectedQueryDataStore.save({
@@ -92,7 +92,7 @@ class ExplainQueriesDataStore {
         promisifyQuery(queryString, [values])
           .then(() => {
             analyzeProgress.explainResultInserted();
-            callback(true);
+            return callback(true);
           })
           .catch(insertError => {
             analyzeProgress.handleErrorOnLogAnalyze(
@@ -120,7 +120,7 @@ class ExplainQueriesDataStore {
             connection.commit();
             connection.end();
             prodConnection.end();
-            explainResultCallback(
+            return explainResultCallback(
               {status: inserted},
               inserted ? undefined : new Error('There was an error in analyze queries by EXPLAIN'));
           }

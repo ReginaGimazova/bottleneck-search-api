@@ -57,7 +57,7 @@ class ProfileQueriesDataStore {
         tuples[index].result = multipleQueryResult[1];
 
         if (index === tuples.length - 1) {
-          callback(tuples);
+          return callback(tuples);
         }
       } catch (e) {
         logger.logError(e.message);
@@ -97,7 +97,7 @@ class ProfileQueriesDataStore {
         promisifyQuery(queryString)
           .then(() => {
             analyzeProgress.profileResultInserted();
-            callback(true);
+            return callback(true);
           })
           .catch(insertError => {
             logger.logError(insertError.message);
@@ -122,7 +122,7 @@ class ProfileQueriesDataStore {
             connection.commit();
             connection.end();
             prodConnection.end();
-            profileResultCallback(
+            return profileResultCallback(
               {status: inserted},
               inserted ? undefined : new Error('There was an error in analyze queries by PROFILE'));
           }
