@@ -7,7 +7,7 @@ import { logger } from '../helpers/Logger';
 import { analyzeProgress } from '../AnalyzeProgress/AnalyzeProgress';
 import ExplainQueriesDataStore from '../ExplainQueries/ExplainQueriesDataStore';
 import ProfileQueriesDataStore from '../ProfileQueries/ProfileQueriesDataStore';
-import UserHostDataStore from "../UserHostSaving/UserHostDataStore";
+import UserHostDataStore from '../UserHostSaving/UserHostDataStore';
 
 class FilteredQueryDataStore {
   protected prodDbConnection() {
@@ -27,6 +27,7 @@ class FilteredQueryDataStore {
         user_host: item.user_host,
         argument: item.argument,
         parametrized_query_id: undefined,
+        parsed_query_hash: ''
       };
     });
   }
@@ -185,29 +186,27 @@ class FilteredQueryDataStore {
         return;
       }
 
-      const tuples = this.createQueriesTuple(queries);
+      const filteredQueriesTuples = this.createQueriesTuple(queries);
 
-      parametrizedQueriesDataStore.getParametrizedQueries({
+      const updatedTuples = await parametrizedQueriesDataStore.getParametrizedQueries({
         connection,
-        tuples,
-        callback: async updatedTuples => {
-          const values = this.convertTupleToQueryString(updatedTuples);
-          await this.insertFilteredQueries({connection, values});
-
-          userHostDataStore.saveUserHosts({connection, tuples: updatedTuples});
-
-          try {
-            const filteredQueries = await this.getAllFilteredQueries(
-              connection
-            );
-
-            await this.nextAnalyzeProcess({ connection, filteredQueries });
-          } catch (e) {
-            logger.logError(e);
-            connection.rollback();
-          }
-        },
+        filteredQueriesTuples,
       });
+      const values = this.convertTupleToQueryString(updatedTuples);
+      await this.insertFilteredQueries({connection, values});
+
+      userHostDataStore.saveUserHosts({connection, tuples: updatedTuples});
+
+      try {
+        const filteredQueries = await this.getAllFilteredQueries(
+          connection
+        );
+
+        await this.nextAnalyzeProcess({ connection, filteredQueries });
+      } catch (e) {
+        logger.logError(e);
+        connection.rollback();
+      }
     } catch (queriesError) {
       connection.rollback();
       logger.logError(queriesError);

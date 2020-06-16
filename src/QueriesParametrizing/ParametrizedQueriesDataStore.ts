@@ -1,16 +1,16 @@
-import { Connection, MysqlError } from 'mysql';
+import { MysqlError } from 'mysql';
 import sha from 'sha1';
 import { promisify } from 'util';
 
-import {rejectedQueryDataStore} from '../RejectedQueriesSaving/RejectedQueryDataStore';
+import { rejectedQueryDataStore } from '../RejectedQueriesSaving/RejectedQueryDataStore';
 import queryParametrizer from './queryParametrizer';
-import {logger} from '../helpers/Logger';
+import { logger } from '../helpers/Logger';
 import DBConnection from '../DatabaseAccess/DBConnection';
-import {analyzeProgress} from "../AnalyzeProgress/AnalyzeProgress";
+import { analyzeProgress } from '../AnalyzeProgress/AnalyzeProgress';
 
 class ParametrizedQueriesDataStore {
-  private static parametrizeQuery({ argument, connection }) {
-    const {query = '', error: parametrizeError = ''} = queryParametrizer(
+  private parametrizeQuery({ argument, connection }) {
+    const { query = '', error: parametrizeError = '' } = queryParametrizer(
       argument
     );
 
@@ -27,29 +27,52 @@ class ParametrizedQueriesDataStore {
     }
   }
 
-  save(connection: Connection, tuple) {
+  /**
+   *
+   * @param connection
+   * @param tuple
+   */
+  async save({connection, query, hash}) {
     const promisifyQuery = promisify(connection.query).bind(connection);
 
-    const { argument } = tuple;
-    const query = ParametrizedQueriesDataStore.parametrizeQuery({
-      argument,
-      connection,
-    });
-
-    if (!query) {
-      return undefined;
-    }
-
-    const hash = sha(query);
-    const valuesTuple = `("${query}", "${hash}", 1)`;
-
     const insertQuery = `
-        insert into master.parametrized_queries (parsed_query, parsed_query_hash, query_count) 
-        values ${valuesTuple} 
-        on duplicate key 
-        update query_count = query_count + 1`;
+      insert into master.parametrized_queries (parsed_query, parsed_query_hash) 
+      values ("${query}", "${hash}")
+    `;
 
-    return promisifyQuery(insertQuery);
+    try {
+      const result = await promisifyQuery(insertQuery);
+      if (result.insertId) {
+        return result.insertId;
+      }
+    } catch (e) {
+      logger.logError(e);
+    }
+  }
+
+  /**
+   *
+   * @param connection
+   * @param argument
+   */
+  private async returnIdOrInsert({ connection, hash }) {
+
+    const selectString = `
+      select id from master.parametrized_queries
+      where parsed_query_hash = '${hash}'
+    `;
+
+    const promisifyQuery = promisify(connection.query).bind(connection);
+
+    try {
+      const result = await promisifyQuery(selectString);
+      if (result.length !== 0) {
+        return result[0].id;
+      }
+    } catch (e) {
+      logger.logError(e);
+      connection.rollback();
+    }
   }
 
   /**
@@ -63,32 +86,40 @@ class ParametrizedQueriesDataStore {
    * Callback from save method return updated query tuples with parametrized_query_id
    */
 
-  public getParametrizedQueries({ connection, tuples, callback }) {
-    tuples.forEach(async (tuple, index) => {
-      try {
-        const parametrizedQueryResult = await this.save(
-          connection,
-          tuple
-        );
+  public async getParametrizedQueries({ connection, filteredQueriesTuples }) {
+    for (let index = 0; index < filteredQueriesTuples.length; index++) {
+      let id;
+      const tuple = filteredQueriesTuples[index];
+      const {argument} = tuple;
 
-        if (!parametrizedQueryResult) {
-          tuples[index] = undefined;
-        } else {
-          const { insertId } = parametrizedQueryResult;
-          tuples[index].parametrized_query_id = insertId;
-        }
+      const query = this.parametrizeQuery({
+        argument,
+        connection,
+      });
 
-        const correctTuples = tuples.filter(t => t);
-
-        if (!correctTuples.find(t => !t.parametrized_query_id)) {
-          analyzeProgress.parametrizedQueriesInserted();
-          callback(correctTuples);
-        }
-      } catch (error) {
-        logger.logError(error);
-        connection.rollback();
+      if (!query) {
+        return undefined;
       }
-    });
+
+      const hash = sha(query);
+
+      id = await this.returnIdOrInsert({
+        connection,
+        hash
+      });
+
+      if (!id) {
+        id = await this.save({connection, query, hash});
+      }
+
+      tuple.parametrized_query_id = id;
+
+      if (index === filteredQueriesTuples.length - 1) {
+        const correctTuples = filteredQueriesTuples.filter(value => value);
+        analyzeProgress.parametrizedQueriesInserted();
+        return correctTuples;
+      }
+    }
   }
 
   getAll({ tables, byHost, callback }) {
@@ -106,18 +137,21 @@ class ParametrizedQueriesDataStore {
         and json_search(json_array(${searchTables}), 'all', table_name) > 0
     `;
 
-    const groupBySql =
-      `select id, parsed_query, query_count from master.parametrized_queries 
-       ${tables.length > 0 ? tablesJoinPart : ''}
-       order by query_count desc;`;
+    const groupBySql = `
+      select parametrized_queries.id, parsed_query, sum(queries_to_user_host.query_count) as query_count
+      from master.parametrized_queries
+      inner join master.queries_to_user_host on parametrized_queries.id = queries_to_user_host.parametrized_query_id
+      ${tables.length > 0 ? tablesJoinPart : ''}
+      group by parsed_query_hash;
+    `;
 
     const groupBySqlAndHost = `
-      select parametrized_queries.id, parsed_query, query_count
+      select parametrized_queries.id, parsed_query, queries_to_user_host.query_count
       from master.parametrized_queries
       inner join master.queries_to_user_host on parametrized_queries.id = queries_to_user_host.parametrized_query_id
       inner join master.user_host on queries_to_user_host.user_host_id = user_host.id
       ${tables.length > 0 ? tablesJoinPart : ''}
-      group by parsed_query_hash;`;
+    `;
 
     const queryString = byHost ? groupBySqlAndHost : groupBySql;
 
