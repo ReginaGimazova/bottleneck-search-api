@@ -21,6 +21,11 @@ class Logger {
     this.settings.setLevel('error')
     this.settings.error(errorMessage)
   }
+
+  logInfo(infoMessage: string){
+    this.settings.setLevel('info');
+    this.settings.info(infoMessage);
+  }
 }
 
 export const logger = new Logger();

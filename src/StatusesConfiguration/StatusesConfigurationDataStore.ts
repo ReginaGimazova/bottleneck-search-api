@@ -11,8 +11,7 @@ class StatusesConfigurationDataStore {
    * @param callback - return updated statuses
    */
   update(statuses = [], callback) {
-    const dbConnection = new DBConnection();
-    const connection = dbConnection.createToolConnection();
+    const connection = new DBConnection().createToolConnection();
     const promisifyQuery = promisify(connection.query).bind(connection);
 
     connection.beginTransaction(error => {
@@ -23,7 +22,7 @@ class StatusesConfigurationDataStore {
         statuses.forEach((status, index) => {
           promisifyQuery(
             `
-              update statuses_configuration
+              update master.statuses_configuration
               set mode = "${status.mode}"
               where value = "${status.value}"
             `
@@ -52,12 +51,11 @@ class StatusesConfigurationDataStore {
    * @param callback - return error or success insert message
    */
   addStatus(newStatusData, callback) {
-    const dbConnection = new DBConnection();
-    const connection = dbConnection.createToolConnection();
+    const connection = new DBConnection().createToolConnection();
 
     const { mode, value, type } = newStatusData;
     const queryString =
-      'insert into statuses_configuration (value, type, mode) values ?';
+      'insert into master.statuses_configuration (value, type, mode) values ?';
     const values = [[`${value}`, `${type.toUpperCase()}`, `${mode}`]];
 
     connection.query(
@@ -81,12 +79,11 @@ class StatusesConfigurationDataStore {
    * @param callback - return error or success removing message
    */
   removeStatus(statusValue, callback) {
-    const dbConnection = new DBConnection();
-    const connection = dbConnection.createToolConnection();
+    const connection = new DBConnection().createToolConnection();
     const promisifyQuery = promisify(connection.query).bind(connection);
     const { value, type } = statusValue;
 
-    const statement = `delete from statuses_configuration where value = "${value}" and type = "${type}"`;
+    const statement = `delete from master.statuses_configuration where value = "${value}" and type = "${type}"`;
 
     promisifyQuery(statement)
       .then(result => {
@@ -125,8 +122,7 @@ class StatusesConfigurationDataStore {
    * @param callback - return all status configurations
    */
   getAll(callback) {
-    const dbConnection = new DBConnection();
-    const connection = dbConnection.createToolConnection();
+    const connection = new DBConnection().createToolConnection();
 
     connection.query(
       'select id, value, type, mode from master.statuses_configuration;',

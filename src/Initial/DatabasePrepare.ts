@@ -2,6 +2,7 @@ import { promisify } from 'util';
 import fs from 'fs';
 import DBConnection from '../DatabaseAccess/DBConnection';
 import {logger} from '../helpers/Logger';
+import {analyzeProgress} from "../AnalyzeProgress/AnalyzeProgress";
 
 /**
  * Used for truncate tables, which contain info from general log file
@@ -14,6 +15,10 @@ const root =
 
 class DatabasePrepare {
   tablesSources = {
+    application_info: {
+      source: `${root}/application_info.sql`,
+      exist: false
+    },
     original_queries: {
       source: `${root}/original_queries.sql`,
       exist: false,
@@ -78,9 +83,12 @@ class DatabasePrepare {
             .readFileSync(this.tablesSources[tableName].source)
             .toString();
           promisifyQuery(script)
-            .then(result => {
+            .then(async result => {
               if (result) {
                 this.tablesSources[tableName].exist = true;
+              }
+              if (index === Object.keys(this.tablesSources).length - 1){
+                await analyzeProgress.updateProgress();
               }
             })
             .catch(err => {
@@ -106,11 +114,13 @@ class DatabasePrepare {
     const connection = dbConnection.createToolConnection();
     const promisifyQuery = promisify(connection.query).bind(connection);
 
-    connection.beginTransaction(error => {
+    connection.beginTransaction(async error => {
       if (error) {
         logger.logError(error);
       } else {
-        promisifyQuery(`
+        await analyzeProgress.resetCounter();
+
+        await promisifyQuery(`
           SET FOREIGN_KEY_CHECKS = 0;
          
           truncate master.original_queries;
@@ -126,9 +136,10 @@ class DatabasePrepare {
           
           SET FOREIGN_KEY_CHECKS = 1;
         `)
-          .then(() => {
+          .then(async () => {
             connection.commit();
             prepareDatabaseCallback(true);
+            await analyzeProgress.updateProgress();
             connection.end();
           })
           .catch(e => {

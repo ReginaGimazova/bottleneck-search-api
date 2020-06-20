@@ -83,6 +83,7 @@ class TablesStatisticDataStore {
       connection.query('SET FOREIGN_KEY_CHECKS = 0;');
 
     } catch (queryTableError) {
+      await analyzeProgress.resetCounter();
       logger.logError(queryTableError);
       connection.rollback();
     }
@@ -93,11 +94,10 @@ class TablesStatisticDataStore {
    * @param table
    * @param connection
    */
-  private insertTablesSeparately = ({
+  private insertTablesSeparately = async ({
     tuple,
     connection,
     isThroughFinalQuery,
-    callbackTuple,
   }) => {
     const promisifyQuery = promisify(connection.query).bind(connection);
 
@@ -105,11 +105,13 @@ class TablesStatisticDataStore {
     const tableNames = Object.keys(tables);
 
     if (isThroughFinalQuery && !Object.entries(tables).length) {
-      analyzeProgress.tablesInserted();
+      logger.logInfo('Tables saved')
+      await analyzeProgress.updateProgress();
     }
 
-    tableNames.forEach(async (name, index) => {
-      const count = tables[name];
+    for (let index = 0; index < tableNames.length; index++) {
+      const name = tableNames[index];
+      const count = tables[name]; // TODO ???
       const tableValue = `('${name}', ${count})`;
 
       const insertQueryString = `
@@ -122,13 +124,14 @@ class TablesStatisticDataStore {
         table_ids.add(insertId);
 
         if (index === tableNames.length - 1) {
-          return callbackTuple(tuple);
+          return tuple;
         }
       } catch (insertTableError) {
+        await analyzeProgress.resetCounter();
         logger.logError(insertTableError);
         connection.rollback();
       }
-    });
+    }
   };
 
   /**
@@ -154,21 +157,21 @@ class TablesStatisticDataStore {
 
     tuples = without(tuples, undefined);
 
-    tuples.forEach((tuple, index) => {
+    tuples.forEach(async (tuple, index) => {
       const isThroughFinalQuery = index === tuples.length - 1;
 
-      this.insertTablesSeparately({
+      tuples[index] = await this.insertTablesSeparately({
         tuple,
         connection,
         isThroughFinalQuery,
-        callbackTuple: async updatedTuple => {
-          tuples[index] = updatedTuple;
-          if (isThroughFinalQuery){
-            await this.saveQueryToTablesRelation({connection, tuples});
-            return callback(true)
-          }
-        },
       });
+
+      if (isThroughFinalQuery){
+        await this.saveQueryToTablesRelation({connection, tuples});
+        logger.logInfo('Tables saved')
+        await analyzeProgress.updateProgress();
+        return callback(true)
+      }
     });
   }
 

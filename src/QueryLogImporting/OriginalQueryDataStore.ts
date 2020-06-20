@@ -13,9 +13,7 @@ const sql = fs.readFileSync(LOG_PATH).toString();
 
 class OriginalQueryDataStore {
   save(): void {
-    const dbConnection = new DBConnection();
-    const connection = dbConnection.createToolConnection();
-
+    const connection = new DBConnection().createToolConnection();
     const filteredQueryDataStore = new FilteredQueryDataStore();
 
     const queryToSave = DBNameReplacer(sql);
@@ -30,7 +28,8 @@ class OriginalQueryDataStore {
           logger.logError('Query Log importing error: ' + err);
           connection.rollback();
         } else if (result) {
-          analyzeProgress.queryLogInserted();
+          logger.logInfo('Log file uploaded')
+          await analyzeProgress.updateProgress();
           await filteredQueryDataStore.save(connection);
         }
       });

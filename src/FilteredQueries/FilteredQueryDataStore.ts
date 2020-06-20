@@ -7,7 +7,7 @@ import { logger } from '../helpers/Logger';
 import { analyzeProgress } from '../AnalyzeProgress/AnalyzeProgress';
 import ExplainQueriesDataStore from '../ExplainQueries/ExplainQueriesDataStore';
 import ProfileQueriesDataStore from '../ProfileQueries/ProfileQueriesDataStore';
-import UserHostDataStore from '../UserHostSaving/UserHostDataStore';
+import UserHostDataStore from '../UserHost/UserHostDataStore';
 
 class FilteredQueryDataStore {
   protected prodDbConnection() {
@@ -78,14 +78,11 @@ class FilteredQueryDataStore {
     try {
       await promisifyQuery(insertQuery);
       connection.query('SET FOREIGN_KEY_CHECKS = 1;');
-      analyzeProgress.filteredQueriesInserted();
+      logger.logInfo('Filtered queries saved')
+      await analyzeProgress.updateProgress();
 
     } catch (insertError) {
-      analyzeProgress.handleErrorOnLogAnalyze(
-        'There was an error in analyzing the ' +
-          'general log during the inserting of filtered queries'
-      );
-
+      await analyzeProgress.resetCounter();
       logger.logError(insertError);
       connection.rollback();
     }
@@ -204,11 +201,13 @@ class FilteredQueryDataStore {
 
         await this.nextAnalyzeProcess({ connection, filteredQueries });
       } catch (e) {
+        await analyzeProgress.resetCounter();
         logger.logError(e);
         connection.rollback();
       }
     } catch (queriesError) {
       connection.rollback();
+      await analyzeProgress.resetCounter();
       logger.logError(queriesError);
     }
   }

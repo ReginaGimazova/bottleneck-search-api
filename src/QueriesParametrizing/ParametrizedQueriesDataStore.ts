@@ -46,6 +46,7 @@ class ParametrizedQueriesDataStore {
         return result.insertId;
       }
     } catch (e) {
+      await analyzeProgress.resetCounter();
       logger.logError(e);
     }
   }
@@ -70,6 +71,7 @@ class ParametrizedQueriesDataStore {
         return result[0].id;
       }
     } catch (e) {
+      await analyzeProgress.resetCounter();
       logger.logError(e);
       connection.rollback();
     }
@@ -97,7 +99,7 @@ class ParametrizedQueriesDataStore {
       });
 
       if (!query) {
-        return undefined;
+        filteredQueriesTuples[index] = undefined;
       }
 
       const hash = sha(query);
@@ -107,7 +109,7 @@ class ParametrizedQueriesDataStore {
         hash
       });
 
-      if (!id) {
+      if (!id && filteredQueriesTuples[index]) {
         id = await this.save({connection, query, hash});
       }
 
@@ -115,15 +117,15 @@ class ParametrizedQueriesDataStore {
 
       if (index === filteredQueriesTuples.length - 1) {
         const correctTuples = filteredQueriesTuples.filter(value => value);
-        analyzeProgress.parametrizedQueriesInserted();
+        logger.logInfo('Parametrized queries saved');
+        await analyzeProgress.updateProgress();
         return correctTuples;
       }
     }
   }
 
   getAll({ tables, byHost, callback }) {
-    const dbConnection = new DBConnection();
-    const connection = dbConnection.createToolConnection();
+    const connection = new DBConnection().createToolConnection();
 
     const searchTables =
       tables.length > 0 ? tables.map(table => `"${table}"`).join(', ') : '';
@@ -150,7 +152,8 @@ class ParametrizedQueriesDataStore {
         from master.queries_to_user_host
         group by parametrized_query_id) as queries_to_user_host
       on parametrized_queries.id = queries_to_user_host.parametrized_query_id
-      ${tables.length > 0 ? tablesJoinPart : ''};
+      ${tables.length > 0 ? tablesJoinPart : ''}
+      order by query_count desc;
     `;
 
     const groupBySqlAndHost = `
@@ -166,6 +169,7 @@ class ParametrizedQueriesDataStore {
       on parametrized_queries.id = queries_to_user_host.parametrized_query_id
       inner join master.user_host on user_host.id = queries_to_user_host.user_host_id
       ${tables.length > 0 ? tablesJoinPart : ''}
+      order by query_count desc;
     `;
 
     const queryString = byHost ? groupBySqlAndHost : groupBySql;

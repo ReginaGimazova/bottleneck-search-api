@@ -1,8 +1,13 @@
 import { promisify } from 'util';
 import { logger } from '../helpers/Logger';
+import { analyzeProgress } from '../AnalyzeProgress/AnalyzeProgress';
 
 class UserHostDataStore {
-  private saveUserHostQueryRelation({ connection, tuples, selectHostResult }) {
+  private async saveUserHostQueryRelation({
+    connection,
+    tuples,
+    selectHostResult,
+  }) {
     const promisifyQuery = promisify(connection.query).bind(connection);
 
     const hostQueryRelation = [];
@@ -18,7 +23,11 @@ class UserHostDataStore {
       });
     });
 
-    const values = hostQueryRelation.map(({parametrized_query_id, id}) => [`${parametrized_query_id}`, `${id}`, 1])
+    const values = hostQueryRelation.map(({ parametrized_query_id, id }) => [
+      `${parametrized_query_id}`,
+      `${id}`,
+      1,
+    ]);
 
     const insertRelation = `
       insert into master.queries_to_user_host (parametrized_query_id, user_host_id, query_count)
@@ -27,31 +36,35 @@ class UserHostDataStore {
       update query_count = query_count + 1
     `;
 
-    promisifyQuery(insertRelation, [values]).catch(error => {
+    try {
+      await promisifyQuery(insertRelation, [values]);
+      logger.logInfo('User host relations saved');
+      await analyzeProgress.updateProgress();
+    } catch (error) {
       logger.logError(error);
       connection.rollback();
-    });
+    }
   }
 
-  private getUserHosts({ connection, tuples }) {
+  private async getUserHosts({ connection, tuples }) {
     const promisifyQuery = promisify(connection.query).bind(connection);
 
     const selectUserHostString = `
       select id, user_host from master.user_host
     `;
 
-    promisifyQuery(selectUserHostString)
-      .then(result => {
-        this.saveUserHostQueryRelation({
-          connection,
-          tuples,
-          selectHostResult: result,
-        });
-      })
-      .catch(error => {
-        connection.rollback();
-        logger.logError(error);
+    try {
+      const result = await promisifyQuery(selectUserHostString);
+      await this.saveUserHostQueryRelation({
+        connection,
+        tuples,
+        selectHostResult: result,
       });
+    } catch (error) {
+      await analyzeProgress.resetCounter();
+      connection.rollback();
+      logger.logError(error);
+    }
   }
 
   /**
@@ -64,22 +77,22 @@ class UserHostDataStore {
 
     const uniqHosts = [...new Set(tuples.map(({ user_host }) => user_host))];
 
-    uniqHosts.forEach((userHost, index) => {
+    uniqHosts.forEach(async (userHost, index) => {
       const insertHostString = `
         insert into master.user_host (user_host) 
         values ("${userHost}")
       `;
 
-      promisifyQuery(insertHostString)
-        .then(() => {
-          if (index === uniqHosts.length - 1) {
-            this.getUserHosts({ connection, tuples });
-          }
-        })
-        .catch(e => {
-          logger.logError(e);
-          connection.rollback();
-        });
+      try {
+        await promisifyQuery(insertHostString);
+        if (index === uniqHosts.length - 1) {
+          await this.getUserHosts({ connection, tuples });
+        }
+      } catch (e) {
+        await analyzeProgress.resetCounter();
+        logger.logError(e);
+        connection.rollback();
+      }
     });
   }
 }

@@ -83,54 +83,52 @@ class ExplainQueriesDataStore {
       tuples,
       prodConnection,
       connection,
-      callback: updatedTuples => {
+      callback: async updatedTuples => {
         const values = this.prepareInsertValues(updatedTuples);
         const queryString = `
           insert into master.explain_replay_info
           (query_id, explain_result) values ?`;
 
-        promisifyQuery(queryString, [values])
-          .then(() => {
-            analyzeProgress.explainResultInserted();
-            return callback(true);
-          })
-          .catch(insertError => {
-            analyzeProgress.handleErrorOnLogAnalyze(
-              'There was an error in analyzing the general log during the processing of the command EXPLAIN'
-            );
-
-            logger.logError(insertError.message);
-            connection.rollback();
-          });
+        try {
+          await promisifyQuery(queryString, [values]);
+          await analyzeProgress.updateProgress();
+          logger.logInfo('EXPLAIN result saved')
+          return callback(true)
+        } catch (insertError) {
+          await analyzeProgress.resetCounter();
+          logger.logError(insertError.message);
+          connection.rollback();
+        }
       },
     });
   }
 
-  public updateExplainResult(explainResultCallback) {
+  public async updateExplainResult(explainResultCallback) {
     const dbConnection = new DBConnection();
     const connection = dbConnection.createToolConnection();
     const prodConnection = dbConnection.createProdConnection();
 
     const filteredQueryDataStore = new FilteredQueryDataStore();
-    filteredQueryDataStore
-      .getAllFilteredQueries(connection)
-      .then(queries => {
-        this.save({connection, prodConnection, queries, callback: (inserted => {
-          if (inserted){
-            connection.commit();
-            connection.end();
-            prodConnection.end();
-            return explainResultCallback(
-              {status: inserted},
-              inserted ? undefined : new Error('There was an error in analyze queries by EXPLAIN'));
-          }
-        })});
-      })
-      .catch(error => {
-        logger.logError(error.message);
-        connection.end();
-        prodConnection.end();
-      })
+
+    try {
+      const queries = await filteredQueryDataStore.getAllFilteredQueries(connection);
+      this.save({connection, prodConnection, queries, callback: (inserted => {
+        if (inserted){
+          connection.commit();
+          connection.end();
+          prodConnection.end();
+
+          return explainResultCallback(
+            {status: inserted},
+            inserted ? undefined : new Error('There was an error in analyze queries by EXPLAIN'));
+        }
+      })});
+    } catch (error) {
+      await analyzeProgress.resetCounter();
+      logger.logError(error.message);
+      connection.end();
+      prodConnection.end();
+    }
   }
   /**
    *
@@ -138,8 +136,7 @@ class ExplainQueriesDataStore {
    * @param callback - returns the retrieving rows by search tables and EXPLAIN statuses configuration
    */
   public async getExplainInfo(tables, callback) {
-    const dbConnection = new DBConnection();
-    const connection = dbConnection.createToolConnection();
+    const connection = new DBConnection().createToolConnection();
 
     const statusesConfigurationDataStore = new StatusesConfigurationDataStore();
     let count = 0;
@@ -163,17 +160,17 @@ class ExplainQueriesDataStore {
     `;
 
     const withStatuses = `
-      select explain_info as critical_statuses, parametrized_queries.parsed_query, queries_to_user_host.query_count
+      select explain_info as critical_statuses, master.parametrized_queries.parsed_query, queries_to_user_host.query_count
       from (
         select
           query_id,
           json_unquote(json_extract(explain_result, '$.Extra')) explain_info
-        from explain_replay_info)
+        from master.explain_replay_info)
         as replay_info
-      inner join statuses_configuration
+      inner join master.statuses_configuration
         on json_search(json_array(explain_info), 'one', statuses_configuration.value) is not null
-      inner join filtered_queries on query_id = filtered_queries.id
-      inner join parametrized_queries on filtered_queries.parametrized_query_id = parametrized_queries.id
+      inner join master.filtered_queries on query_id = filtered_queries.id
+      inner join master.parametrized_queries on filtered_queries.parametrized_query_id = parametrized_queries.id
       inner join (
         select
           parametrized_query_id,
@@ -183,20 +180,21 @@ class ExplainQueriesDataStore {
         on parametrized_queries.id = queries_to_user_host.parametrized_query_id
       ${tables.length > 0 ? tablesJoinPart : ''}
       where mode = true and type = 'EXPLAIN'
-      group by parametrized_queries.parsed_query_hash;
+      group by parametrized_queries.parsed_query_hash
+      order by query_count desc;
     `;
 
     const withoutStatuses = `
-      select explain_info as critical_statuses, parametrized_queries.parsed_query, queries_to_user_host.query_count
+      select explain_info as critical_statuses, master.parametrized_queries.parsed_query, queries_to_user_host.query_count
       from (
         select
           query_id,
           json_unquote(json_extract(explain_result, '$.Extra')) explain_info
-        from explain_replay_info)
+        from master.explain_replay_info)
         as replay_info
         
-        inner join filtered_queries on query_id = filtered_queries.id
-        inner join parametrized_queries on filtered_queries.parametrized_query_id = parametrized_queries.id
+        inner join master.filtered_queries on query_id = filtered_queries.id
+        inner join master.parametrized_queries on filtered_queries.parametrized_query_id = parametrized_queries.id
         inner join (
           select
             parametrized_query_id,
@@ -205,7 +203,8 @@ class ExplainQueriesDataStore {
           group by parametrized_query_id) as queries_to_user_host
           on parametrized_queries.id = queries_to_user_host.parametrized_query_id
         ${tables.length > 0 ? tablesJoinPart : ''}
-      group by parametrized_queries.parsed_query_hash;
+      group by parametrized_queries.parsed_query_hash
+      order by query_count desc;
     `;
 
     const query = count > 0 ? withStatuses : withoutStatuses;

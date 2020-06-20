@@ -94,15 +94,17 @@ class ProfileQueriesDataStore {
 
         await promisifyProdQuery('set profiling = 0;');
 
-        promisifyQuery(queryString)
-          .then(() => {
-            analyzeProgress.profileResultInserted();
-            return callback(true);
-          })
-          .catch(insertError => {
-            logger.logError(insertError.message);
-            connection.rollback();
-          });
+        try {
+          await promisifyQuery(queryString);
+          logger.logInfo('PROFILE result saved');
+          await analyzeProgress.updateProgress();
+          return callback(true);
+
+        } catch (insertError){
+          logger.logError(insertError.message);
+          await analyzeProgress.resetCounter();
+          connection.rollback();
+        }
       },
     });
   }
@@ -129,6 +131,7 @@ class ProfileQueriesDataStore {
           })});
       })
       .catch(error => {
+        analyzeProgress.resetCounter();
         logger.logError(error.message);
         connection.end();
         prodConnection.end();
@@ -141,8 +144,7 @@ class ProfileQueriesDataStore {
    * @param callback - returns the retrieving rows by search tables and PROFILE statuses configuration
    */
   public async getProfileInfo(tables, callback) {
-    const dbConnection = new DBConnection();
-    const connection = dbConnection.createToolConnection();
+    const connection = new DBConnection().createToolConnection();
     const statusesConfigurationDataStore = new StatusesConfigurationDataStore();
 
     let count = 0;
@@ -161,17 +163,17 @@ class ProfileQueriesDataStore {
 
     const withoutStatuses = `
       select
-        json_unquote(json_arrayagg(json_object('status', replay_info.status, 'duration', replay_info.duration))) critical_statuses,
-        parametrized_queries.parsed_query,
+        json_arrayagg(json_object('status', replay_info.status, 'duration', replay_info.duration)) critical_statuses,
+        master.parametrized_queries.parsed_query,
         queries_to_user_host.query_count
       from (
         select
            query_id,
            status,
            duration
-        from profile_replay_info)
+        from master.profile_replay_info)
         as replay_info
-      inner join parametrized_queries on replay_info.query_id = parametrized_queries.id
+      inner join master.parametrized_queries on replay_info.query_id = parametrized_queries.id
       inner join (
         select
           parametrized_query_id,
@@ -180,24 +182,25 @@ class ProfileQueriesDataStore {
       group by parametrized_query_id) as queries_to_user_host
       on parametrized_queries.id = queries_to_user_host.parametrized_query_id
       ${tables.length > 0 ? tablesJoinPart : ''}
-      group by parametrized_queries.parsed_query_hash;
+      group by parametrized_queries.parsed_query_hash
+      order by query_count desc;
     `;
 
     const withStatuses = `
       select
         json_arrayagg (
           json_object (
-            'status', profile_replay_info.status,
+            'status', master.profile_replay_info.status,
             'duration', profile_replay_info.duration
           )
         ) critical_statuses,
-        parametrized_queries.parsed_query,
+        master.parametrized_queries.parsed_query,
         queries_to_user_host.query_count
       from
-        parametrized_queries
-        inner join filtered_queries on filtered_queries.parametrized_query_id = parametrized_queries.id
-        inner join profile_replay_info on filtered_queries.id = profile_replay_info.query_id
-        inner join statuses_configuration on statuses_configuration.value = profile_replay_info.status
+        master.parametrized_queries
+        inner join master.filtered_queries on filtered_queries.parametrized_query_id = parametrized_queries.id
+        inner join master.profile_replay_info on filtered_queries.id = profile_replay_info.query_id
+        inner join master.statuses_configuration on statuses_configuration.value = profile_replay_info.status
         inner join (
           select
             parametrized_query_id,
@@ -207,7 +210,8 @@ class ProfileQueriesDataStore {
         on parametrized_queries.id = queries_to_user_host.parametrized_query_id
         ${tables.length > 0 ? tablesJoinPart : ''}
       where statuses_configuration.mode = true and type = 'PROFILE'
-      group by parametrized_queries.parsed_query_hash;
+      group by parametrized_queries.parsed_query_hash
+      order by query_count desc;
     `;
 
     const query = count === 0 ? withoutStatuses : withStatuses;
