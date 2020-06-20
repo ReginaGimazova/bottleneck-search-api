@@ -31,7 +31,7 @@ export class ExplainQueriesController extends ControllerBase {
     const explainQueriesDataStore = new ExplainQueriesDataStore();
     await databasePrepare.truncateCurrentTable('explain_replay_info');
 
-    explainQueriesDataStore.updateExplainResult(async (data, error) => {
+    await explainQueriesDataStore.updateExplainResult(async (data, error) => {
       if (error)
         res.status(500).send({
           message:

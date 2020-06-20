@@ -7,8 +7,9 @@ import queryParametrizer from './queryParametrizer';
 import { logger } from '../helpers/Logger';
 import DBConnection from '../DatabaseAccess/DBConnection';
 import { analyzeProgress } from '../AnalyzeProgress/AnalyzeProgress';
+import QueriesDataStoreBase from "../QueriesDataStoreBase";
 
-class ParametrizedQueriesDataStore {
+class ParametrizedQueriesDataStore extends QueriesDataStoreBase {
   private parametrizeQuery({ argument, connection }) {
     const { query = '', error: parametrizeError = '' } = queryParametrizer(
       argument
@@ -124,23 +125,14 @@ class ParametrizedQueriesDataStore {
     }
   }
 
+  protected tablesQueryBuild(tables): string {
+    return super.tablesQueryBuild(tables);
+  }
+
   getAll({ tables, byHost, callback }) {
     const connection = new DBConnection().createToolConnection();
 
-    const searchTables =
-      tables.length > 0 ? tables.map(table => `"${table}"`).join(', ') : '';
-
-    const tablesJoinPart = `
-      inner join (
-        select parametrized_query_id
-        from filtered_queries
-        inner join queries_to_tables on filtered_queries.id = queries_to_tables.query_id
-        inner join tables_statistic
-          on queries_to_tables.table_id = tables_statistic.id
-          and json_search(json_array(${searchTables}), 'all', table_name) > 0
-        group by parametrized_query_id) as filtered_by_tables
-        on filtered_by_tables.parametrized_query_id
-    `;
+    const tablesJoinPart =  this.tablesQueryBuild(tables);
 
     const groupBySql = `
       select parametrized_queries.id, parsed_query, queries_to_user_host.query_count

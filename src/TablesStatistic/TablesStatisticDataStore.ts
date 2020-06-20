@@ -111,7 +111,7 @@ class TablesStatisticDataStore {
 
     for (let index = 0; index < tableNames.length; index++) {
       const name = tableNames[index];
-      const count = tables[name]; // TODO ???
+      const count = tables[name];
       const tableValue = `('${name}', ${count})`;
 
       const insertQueryString = `

@@ -6,8 +6,9 @@ import { analyzeProgress } from '../AnalyzeProgress/AnalyzeProgress';
 import DBConnection from '../DatabaseAccess/DBConnection';
 import StatusesConfigurationDataStore from '../StatusesConfiguration/StatusesConfigurationDataStore';
 import FilteredQueryDataStore from "../FilteredQueries/FilteredQueryDataStore";
+import QueriesDataStoreBase from "../QueriesDataStoreBase";
 
-class ProfileQueriesDataStore {
+class ProfileQueriesDataStore extends QueriesDataStoreBase {
   /**
    *
    * @param queries - filtered queries
@@ -26,7 +27,7 @@ class ProfileQueriesDataStore {
    *
    * @param tuples
    */
-  protected prepareInsertValues = tuples =>
+  private prepareInsertValues = tuples =>
     tuples
       .map(({ id, result }) =>
         result
@@ -69,10 +70,11 @@ class ProfileQueriesDataStore {
    *
    * @param connection
    * @param prodConnection
+   * @param isUpdate - if run only PROFILE update, not all file analyze, updateProgress shouldn't be called
    * @param queries
    * @param callback
    */
-  public async save({ connection, prodConnection, queries, callback }) {
+  public async save({ connection, prodConnection, isUpdate = false, queries, callback }) {
     const tuples = this.convertQueriesToTuple(queries);
 
     const promisifyQuery = promisify(connection.query).bind(connection);
@@ -97,12 +99,16 @@ class ProfileQueriesDataStore {
         try {
           await promisifyQuery(queryString);
           logger.logInfo('PROFILE result saved');
-          await analyzeProgress.updateProgress();
+          if (!isUpdate) {
+            await analyzeProgress.updateProgress();
+          }
           return callback(true);
 
         } catch (insertError){
           logger.logError(insertError.message);
-          await analyzeProgress.resetCounter();
+          if (!isUpdate) {
+            await analyzeProgress.resetCounter();
+          }
           connection.rollback();
         }
       },
@@ -119,7 +125,7 @@ class ProfileQueriesDataStore {
     filteredQueryDataStore
       .getAllFilteredQueries(connection)
       .then(async queries => {
-        await this.save({connection, prodConnection, queries, callback: (inserted => {
+        await this.save({connection, prodConnection, queries, isUpdate: true, callback: (inserted => {
           if (inserted){
             connection.commit();
             connection.end();
@@ -130,12 +136,16 @@ class ProfileQueriesDataStore {
           }
           })});
       })
-      .catch(error => {
-        analyzeProgress.resetCounter();
+      .catch(async error => {
+        await analyzeProgress.resetCounter();
         logger.logError(error.message);
         connection.end();
         prodConnection.end();
       })
+  }
+
+  protected tablesQueryBuild(tables): string {
+    return super.tablesQueryBuild(tables);
   }
 
   /**
@@ -155,11 +165,7 @@ class ProfileQueriesDataStore {
       callbackCountOfStatuses: currentCount => count = currentCount,
     });
 
-    const tablesJoinPart = `
-      inner join queries_to_tables on filtered_queries.id = queries_to_tables.query_id
-      inner join tables_statistic on queries_to_tables.table_id = tables_statistic.id
-      and json_search(json_array('app', 'user'), 'all', table_name) > 0
-    `;
+    const tablesJoinPart =  this.tablesQueryBuild(tables);
 
     const withoutStatuses = `
       select

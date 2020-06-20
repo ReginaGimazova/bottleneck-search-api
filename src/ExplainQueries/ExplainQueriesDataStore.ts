@@ -7,8 +7,9 @@ import DBConnection from '../DatabaseAccess/DBConnection';
 import StatusesConfigurationDataStore from '../StatusesConfiguration/StatusesConfigurationDataStore';
 import { rejectedQueryDataStore } from '../RejectedQueriesSaving/RejectedQueryDataStore';
 import FilteredQueryDataStore from "../FilteredQueries/FilteredQueryDataStore";
+import QueriesDataStoreBase from "../QueriesDataStoreBase";
 
-class ExplainQueriesDataStore {
+class ExplainQueriesDataStore extends QueriesDataStoreBase {
   /**
    *
    * @param queries - filtered queries
@@ -72,10 +73,11 @@ class ExplainQueriesDataStore {
    *
    * @param connection - connection to tool database
    * @param prodConnection - connection to production database, which contains original info
+   * @param isUpdate - if run only EXPLAIN update, not all file analyze, updateProgress shouldn't be called
    * @param queries - filtered queries
    * @param callback - return 'true' to FilteredQueryDataStore, if all queries with EXPLAIN info were inserted
    */
-  public save({ connection, prodConnection, queries, callback }) {
+  public save({ connection, prodConnection, isUpdate = false, queries, callback }) {
     const tuples = this.convertQueriesToTuple(queries);
     const promisifyQuery = promisify(connection.query).bind(connection);
 
@@ -91,11 +93,15 @@ class ExplainQueriesDataStore {
 
         try {
           await promisifyQuery(queryString, [values]);
-          await analyzeProgress.updateProgress();
+          if (!isUpdate) {
+            await analyzeProgress.updateProgress();
+          }
           logger.logInfo('EXPLAIN result saved')
           return callback(true)
         } catch (insertError) {
-          await analyzeProgress.resetCounter();
+          if (!isUpdate) {
+            await analyzeProgress.resetCounter();
+          }
           logger.logError(insertError.message);
           connection.rollback();
         }
@@ -112,7 +118,7 @@ class ExplainQueriesDataStore {
 
     try {
       const queries = await filteredQueryDataStore.getAllFilteredQueries(connection);
-      this.save({connection, prodConnection, queries, callback: (inserted => {
+      this.save({connection, prodConnection, queries, isUpdate: true, callback: (inserted => {
         if (inserted){
           connection.commit();
           connection.end();
@@ -130,6 +136,11 @@ class ExplainQueriesDataStore {
       prodConnection.end();
     }
   }
+
+  protected tablesQueryBuild(tables): string {
+    return super.tablesQueryBuild(tables);
+  }
+
   /**
    *
    * @param tables - a set of tables for find matching queries
@@ -149,15 +160,7 @@ class ExplainQueriesDataStore {
       },
     });
 
-    const searchTables =
-      tables.length > 0 ? tables.map(table => `"${table}"`).join(', ') : '';
-
-    const tablesJoinPart = `
-      inner join queries_to_tables on filtered_queries.id = queries_to_tables.query_id
-      inner join tables_statistic
-        on queries_to_tables.table_id = tables_statistic.id
-        and json_search(json_array(${searchTables}), 'all', table_name) > 0
-    `;
+    const tablesJoinPart =  this.tablesQueryBuild(tables);
 
     const withStatuses = `
       select explain_info as critical_statuses, master.parametrized_queries.parsed_query, queries_to_user_host.query_count
