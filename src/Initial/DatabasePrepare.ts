@@ -3,68 +3,64 @@ import fs from 'fs';
 import DBConnection from '../DatabaseAccess/DBConnection';
 import {logger} from '../helpers/Logger';
 import {analyzeProgress} from "../AnalyzeProgress/AnalyzeProgress";
+import {dirName} from '../SqlSources/dirName';
 
 /**
  * Used for truncate tables, which contain info from general log file
  */
 
-// TODO: поправить пути до файлов
-
-const root =
-  '/home/regina/Документы/projects/bottleneck-search-api/src/SqlSources';
-
 class DatabasePrepare {
   tablesSources = {
     application_info: {
-      source: `${root}/application_info.sql`,
+      source: `${dirName}/application_info.sql`,
       exist: false
     },
     original_queries: {
-      source: `${root}/original_queries.sql`,
+      source: `${dirName}/original_queries.sql`,
       exist: false,
     },
     filter: {
-      source: `${root}/filter.sql`,
+      source: `${dirName}/filter.sql`,
       exist: false,
     },
     statuses_configuration: {
-      source: `${root}/statuses_configuration.sql`,
+      source: `${dirName}/statuses_configuration.sql`,
       exist: false,
     },
     parametrized_queries: {
-      source: `${root}/parametrized_queries.sql`,
+      source: `${dirName}/parametrized_queries.sql`,
       exist: false,
     },
     user_host: {
-      source: `${root}/user_host.sql`,
+      source: `${dirName}/user_host.sql`,
       exist: false,
     },
     queries_to_user_host: {
-      source: `${root}/queries_to_user_host.sql`,
+      source: `${dirName}/queries_to_user_host.sql`,
       exist: false
     },
     filtered_queries: {
-      source: `${root}/filtered_queries.sql`,
+      source: `${dirName}/filtered_queries.sql`,
       exist: false,
     },
     rejected_queries: {
-      source: `${root}/rejected_queries.sql`,
+      source: `${dirName}/rejected_queries.sql`,
       exist: false,
     },
     tables_statistic: {
-      source: `${root}/tables_statistic.sql`,
+      source: `${dirName}/tables_statistic.sql`,
       exist: false,
     },
     queries_to_tables: {
-      source: `${root}/queries_to_tables.sql`,
+      source: `${dirName}/queries_to_tables.sql`,
       exist: false,
     },
     explain_replay_info: {
-      source: `${root}/explain_replay_info.sql`,
+      source: `${dirName}/explain_replay_info.sql`,
       exist: false,
     },
     profile_replay_info: {
-      source: `${root}/profile_replay_info.sql`,
+      source: `${dirName}/profile_replay_info.sql`,
       exist: false,
     },
   };
