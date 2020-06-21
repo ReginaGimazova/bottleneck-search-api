@@ -7,7 +7,7 @@ import { Request } from 'express';
 class ControllerBase {
   public parseRequest(req: Request){
     const {query} = req;
-    const byHost = req.query.host ? JSON.parse(query.host) : false;
+    const byHost = req.query.byHost ? JSON.parse(query.byHost) : false;
     const tables = req.query.search_tables ? JSON.parse(query.search_tables) : [];
     const page = JSON.parse(query.page);
 

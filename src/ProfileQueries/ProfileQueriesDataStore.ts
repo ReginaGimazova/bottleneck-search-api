@@ -197,7 +197,8 @@ class ProfileQueriesDataStore extends QueriesDataStoreBase {
         json_arrayagg (
           json_object (
             'status', master.profile_replay_info.status,
-            'duration', profile_replay_info.duration
+            'duration', profile_replay_info.duration,
+            'statusId', profile_replay_info.id
           )
         ) critical_statuses,
         master.parametrized_queries.parsed_query,

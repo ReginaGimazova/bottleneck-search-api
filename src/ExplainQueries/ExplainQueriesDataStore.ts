@@ -163,10 +163,18 @@ class ExplainQueriesDataStore extends QueriesDataStoreBase {
     const tablesJoinPart =  this.tablesQueryBuild(tables);
 
     const withStatuses = `
-      select explain_info as critical_statuses, master.parametrized_queries.parsed_query, queries_to_user_host.query_count
+      select 
+        json_arrayagg( 
+          json_object (
+            'status', explain_info,
+            'statusId', replay_info.id
+          )) as critical_statuses, 
+        master.parametrized_queries.parsed_query, 
+        queries_to_user_host.query_count
       from (
         select
           query_id,
+          id,
           json_unquote(json_extract(explain_result, '$.Extra')) explain_info
         from master.explain_replay_info)
         as replay_info
@@ -188,9 +196,17 @@ class ExplainQueriesDataStore extends QueriesDataStoreBase {
     `;
 
     const withoutStatuses = `
-      select explain_info as critical_statuses, master.parametrized_queries.parsed_query, queries_to_user_host.query_count
+      select 
+         json_arrayagg( 
+          json_object (
+            'status', explain_info,
+            'statusId', replay_info.id
+          )) as critical_statuses, 
+        master.parametrized_queries.parsed_query, 
+        queries_to_user_host.query_count
       from (
         select
+          id,
           query_id,
           json_unquote(json_extract(explain_result, '$.Extra')) explain_info
         from master.explain_replay_info)

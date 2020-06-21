@@ -98,6 +98,32 @@ class FilteredQueryDataStore {
     return promisifyQuery('select id, query_text from master.filtered_queries');
   }
 
+  public async getByStatusId({statusId, type, getQueryCallback}){
+    const connection = new DBConnection().createToolConnection();
+    const promisifyQuery = promisify(connection.query).bind(connection);
+
+    const selectQueryTextForProfile  = `
+      select query_text from master.filtered_queries
+      inner join master.profile_replay_info on filtered_queries.id = profile_replay_info.query_id
+      where profile_replay_info.id = ${statusId};
+    `;
+
+    const selectQueryTextForExplain  = `
+      select query_text from master.filtered_queries
+      inner join master.explain_replay_info on filtered_queries.id = explain_replay_info.query_id
+      where explain_replay_info.id = ${statusId};
+    `;
+
+    const selectQueryText = type === 'explain' ? selectQueryTextForExplain : selectQueryTextForProfile;
+
+    try {
+      const filteredQueryText = await promisifyQuery(selectQueryText);
+      getQueryCallback(filteredQueryText, undefined)
+    } catch (e) {
+      logger.logError(e);
+      getQueryCallback(undefined, e.message);
+    }
+  }
   /**
    *
    * @param connection - connection to tool database
@@ -109,7 +135,6 @@ class FilteredQueryDataStore {
    * async functions which work asynchronously, since they are independent of each other
    */
 
-  // check is this functions async
   private async nextAnalyzeProcess({ connection, filteredQueries }) {
     const tablesStatisticDataStore = new TablesStatisticDataStore();
     const explainQueriesDataStore = new ExplainQueriesDataStore();
@@ -128,6 +153,7 @@ class FilteredQueryDataStore {
         connection.commit();
         prodConnection.end();
         connection.end();
+        analyzeProgress.resetCounter();
       }
     };
 
@@ -168,7 +194,6 @@ class FilteredQueryDataStore {
    * Insert filtered queries and next steps for analysis
    */
 
-  // TODO: refactor this method
   async save(connection) {
     const promisifyQuery = promisify(connection.query).bind(connection);
     const parametrizedQueriesDataStore = new ParametrizedQueriesDataStore();

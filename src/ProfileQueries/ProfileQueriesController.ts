@@ -17,7 +17,7 @@ export class ProfileQueriesController extends ControllerBase {
         const pageCount = Math.ceil(data.length / 10);
         res.status(200).send({
           page: page > pageCount ? pageCount : page,
-          page_count: pageCount,
+          pageCount,
           queries: data.slice(page * limit - limit, page * limit)
         });
       }
@@ -31,7 +31,7 @@ export class ProfileQueriesController extends ControllerBase {
         if (!existCheckResult) {
           res.status(200).send({
             page: 0,
-            page_count: 0,
+            pageCount: 0,
             queries: [],
           });
 
