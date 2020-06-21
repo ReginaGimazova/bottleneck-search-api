@@ -4,7 +4,7 @@ const queryParametrizer = originalQuery => {
   const parser = new Parser();
 
   const recursiveVisitorOfQuery = astObject => {
-    const constTypes = ['string', 'number', 'boolean'];
+    const constTypes = ['string', 'number', 'boolean', 'expr_list'];
     const leftRightNodes = ['binary_expr'];
     if (astObject) {
       if (constTypes.includes(astObject.type)) {
@@ -18,6 +18,10 @@ const queryParametrizer = originalQuery => {
           recursiveVisitorOfQuery(column.expr);
         });
         recursiveVisitorOfQuery(astObject.where);
+      } else if (astObject.type === 'unary_expr'){
+        recursiveVisitorOfQuery(astObject.expr)
+      } else if (astObject.parentheses === true) {
+        recursiveVisitorOfQuery(astObject.ast)
       }
     }
     return astObject;

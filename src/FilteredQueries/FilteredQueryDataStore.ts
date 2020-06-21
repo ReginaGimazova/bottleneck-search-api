@@ -153,7 +153,6 @@ class FilteredQueryDataStore {
         connection.commit();
         prodConnection.end();
         connection.end();
-        analyzeProgress.resetCounter();
       }
     };
 

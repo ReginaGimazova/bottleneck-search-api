@@ -166,9 +166,10 @@ class ParametrizedQueriesDataStore extends QueriesDataStoreBase {
 
     const queryString = byHost ? groupBySqlAndHost : groupBySql;
 
-    connection.query(queryString, (err: MysqlError, result: any) => {
+    connection.query(queryString, async (err: MysqlError, result: any) => {
       if (result) {
         callback(result, undefined);
+        await analyzeProgress.resetCounter();
       }
       if (err) {
         logger.logError(err);
