@@ -1,6 +1,6 @@
 import ProfileQueriesDataStore from "./ProfileQueriesDataStore";
 import ControllerBase from "../helpers/ControllerBase";
-import {checkTableInDatabase} from "../helpers/CheckTableInDatabase";
+import {checkTableInDatabase} from "../Initial/CheckTableInDatabase";
 import databasePrepare from "../Initial/DatabasePrepare";
 
 export class ProfileQueriesController extends ControllerBase {
@@ -25,20 +25,17 @@ export class ProfileQueriesController extends ControllerBase {
   };
 
   public getAll = async (req, res) => {
-    checkTableInDatabase.checkTable({
-      tableName: 'profile_replay_info',
-      callbackCheckTable: existCheckResult => {
-        if (!existCheckResult) {
-          res.status(200).send({
-            page: 0,
-            pageCount: 0,
-            queries: [],
-          });
+    const existCheckResult = await checkTableInDatabase.checkTable('profile_replay_info');
 
-          return;
-        }
-      },
-    });
+    if (!existCheckResult) {
+      res.status(200).send({
+        page: 0,
+        pageCount: 0,
+        queries: [],
+      });
+
+      return;
+    }
 
     await this.getProfileInfoIfSuccess(req, res);
   };
@@ -47,7 +44,7 @@ export class ProfileQueriesController extends ControllerBase {
     const profileQueriesDataStore = new ProfileQueriesDataStore();
     await databasePrepare.truncateCurrentTable('profile_replay_info');
 
-    profileQueriesDataStore.updateProfileResult(async (data, error) => {
+    profileQueriesDataStore.updateProfileResult(async (error) => {
       if (error)
         res.status(500).send({
           message:

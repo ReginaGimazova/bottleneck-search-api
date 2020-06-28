@@ -1,23 +1,20 @@
 import { originalQueryController } from '../QueryLogImporting/OriginalQueryController';
 import databasePrepare from "./DatabasePrepare";
-import {checkTableInDatabase} from "../helpers/CheckTableInDatabase";
+import {checkTableInDatabase} from "./CheckTableInDatabase";
 
 export class InitialController {
-  init() {
-    checkTableInDatabase.checkTable({
-      tableName: 'original_queries',
-      callbackCheckTable: exist => {
-        if (exist){
-          databasePrepare.truncateTables(tablesTruncated => {
-            if (tablesTruncated) {
-              originalQueryController.save();
-            }
-          })
-        } else {
-          databasePrepare.createTables();
+  async init() {
+    const exist = await checkTableInDatabase.checkTable('original_queries');
+
+    if (exist){
+      databasePrepare.truncateTables(tablesTruncated => {
+        if (tablesTruncated) {
+          originalQueryController.save();
         }
-      },
-    });
+      })
+    } else {
+      databasePrepare.createTables();
+    }
   }
 }
 

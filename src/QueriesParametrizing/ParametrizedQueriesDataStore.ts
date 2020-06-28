@@ -7,9 +7,16 @@ import queryParametrizer from './queryParametrizer';
 import { logger } from '../helpers/Logger';
 import DBConnection from '../DatabaseAccess/DBConnection';
 import { analyzeProgress } from '../AnalyzeProgress/AnalyzeProgress';
-import QueriesDataStoreBase from "../QueriesDataStoreBase";
+import QueriesDataStoreBase from "../helpers/QueriesDataStoreBase";
 
 class ParametrizedQueriesDataStore extends QueriesDataStoreBase {
+  /**
+   *
+   * @param argument - query string
+   * @param connection - tool database connection
+   *
+   * @summary returns parametrized string for this argument (query text)
+   */
   private parametrizeQuery({ argument, connection }) {
     const { query = '', error: parametrizeError = '' } = queryParametrizer(
       argument
@@ -30,8 +37,11 @@ class ParametrizedQueriesDataStore extends QueriesDataStoreBase {
 
   /**
    *
-   * @param connection
-   * @param tuple
+   * @param connection - tool database connection
+   * @param query - parametrized query text
+   * @param hash - parametrized query hash
+   *
+   * @summary Save data to parametrized_queries table
    */
   async save({connection, query, hash}) {
     const promisifyQuery = promisify(connection.query).bind(connection);
@@ -54,8 +64,10 @@ class ParametrizedQueriesDataStore extends QueriesDataStoreBase {
 
   /**
    *
-   * @param connection
-   * @param argument
+   * @param connection - tool database connection
+   * @param hash - parametrized query hash
+   *
+   * @summary Return id if this parametrized query already saved or insert this  parametrized query string
    */
   private async returnIdOrInsert({ connection, hash }) {
 
@@ -85,7 +97,7 @@ class ParametrizedQueriesDataStore extends QueriesDataStoreBase {
    * (if an error occurred during parsing using the 'node-sql-parser' library,
    * then such tuple cancelled (= undefined))
    *
-   * Callback from save method return updated query tuples with parametrized_query_id
+   * @summary This function returns updated query tuples with parametrized_query_id
    */
 
   public async getParametrizedQueries({ connection, filteredQueriesTuples }) {
@@ -125,10 +137,22 @@ class ParametrizedQueriesDataStore extends QueriesDataStoreBase {
     }
   }
 
+  /**
+   *
+   * @param tables - a set of tables
+   *
+   * @summary Return prepared part of query string with tables_statistic, queries_to_tables relationships join
+   */
   protected tablesQueryBuild(tables): string {
     return super.tablesQueryBuild(tables);
   }
 
+  /**
+   *
+   * @param tables - a set of tables for find matching queries
+   * @param byHost - boolean value. If byHost = true, then queries should grouped by sql and user host
+   * @param callback - this function return data and error to controller
+   */
   getAll({ tables, byHost, callback }) {
     const connection = new DBConnection().createToolConnection();
 

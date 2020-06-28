@@ -7,16 +7,14 @@ import DBConnection from '../DatabaseAccess/DBConnection';
 import StatusesConfigurationDataStore from '../StatusesConfiguration/StatusesConfigurationDataStore';
 import { rejectedQueryDataStore } from '../RejectedQueriesSaving/RejectedQueryDataStore';
 import FilteredQueryDataStore from "../FilteredQueries/FilteredQueryDataStore";
-import QueriesDataStoreBase from "../QueriesDataStoreBase";
+import QueriesDataStoreBase from "../helpers/QueriesDataStoreBase";
 
 class ExplainQueriesDataStore extends QueriesDataStoreBase {
   /**
    *
    * @param queries - filtered queries
    *
-   * method used for create
-   *    (id = filtered_query_id, query_text = filtered_query_text, result = explain info )
-   * tuples from queries.
+   * @summary Create (id = filtered_query_id, query_text = filtered_query_text, result = explain info ) tuples from queries.
    */
 
   protected convertQueriesToTuple(queries) {
@@ -29,33 +27,35 @@ class ExplainQueriesDataStore extends QueriesDataStoreBase {
 
   /**
    *
-   * @param tuples, created in convertQueriesToTuple method (result = EXPLAIN output),
-   * convert to query string, suitable for MySQL insert statement
+   * @param filteredQueriesTuples - created in convertQueriesToTuple method (result = EXPLAIN output),
+   * @summary Convert to query string, suitable for MySQL insert statement
    */
-  protected prepareInsertValues = tuples =>
-    tuples
+  protected prepareInsertValues = filteredQueriesTuples =>
+    filteredQueriesTuples
       .filter(tuple => tuple.result)
       .map(({id, result}) => [`${id}`, `${result}`])
 
   /**
    *
-   * @param tuples - tuples, created in convertQueriesToTuple method (result = undefined)
+   * @param filteredQueriesTuples - tuples, created in convertQueriesToTuple method (result = undefined)
    * @param prodConnection - connection to production database, which contains original info
    * @param connection - connection to tool database
    * @param callback - return updated tuples with result = EXPLAIN output
+   *
+   * @summary Execute 'EXPLAIN' command for all queries
    */
-  private analyzeQueries({ tuples, prodConnection, connection, callback }) {
+  private analyzeQueries({ filteredQueriesTuples, prodConnection, connection, callback }) {
     const promisifyQuery = promisify(prodConnection.query).bind(prodConnection);
 
-    tuples.forEach(async ({ query_text }, index) => {
+    filteredQueriesTuples.forEach(async ({ query_text }, index) => {
       const queryString = `explain ${query_text};`;
 
       try {
         const analyzeResult = await promisifyQuery(queryString);
-        tuples[index].result = JSON.stringify(analyzeResult[0]);
+        filteredQueriesTuples[index].result = JSON.stringify(analyzeResult[0]);
 
-        if (index === tuples.length - 1) {
-          return callback(tuples);
+        if (index === filteredQueriesTuples.length - 1) {
+          return callback(filteredQueriesTuples);
         }
       } catch (e) {
         rejectedQueryDataStore.save({
@@ -73,16 +73,18 @@ class ExplainQueriesDataStore extends QueriesDataStoreBase {
    *
    * @param connection - connection to tool database
    * @param prodConnection - connection to production database, which contains original info
-   * @param isUpdate - if run only EXPLAIN update, not all file analyze, updateProgress shouldn't be called
+   * @param isUpdate - this value = true, if the EXPLAIN result should be updated, this value = false, if the whole file analyze
    * @param queries - filtered queries
    * @param callback - return 'true' to FilteredQueryDataStore, if all queries with EXPLAIN info were inserted
+   *
+   * @summary Save 'EXPLAIN' result to explain_replay_info table
    */
   public save({ connection, prodConnection, isUpdate = false, queries, callback }) {
-    const tuples = this.convertQueriesToTuple(queries);
+    const filteredQueriesTuples = this.convertQueriesToTuple(queries);
     const promisifyQuery = promisify(connection.query).bind(connection);
 
     this.analyzeQueries({
-      tuples,
+      filteredQueriesTuples,
       prodConnection,
       connection,
       callback: async updatedTuples => {
@@ -109,6 +111,12 @@ class ExplainQueriesDataStore extends QueriesDataStoreBase {
     });
   }
 
+  /**
+   *
+   * @param explainResultCallback - return Error or undefined
+   *
+   * @summary Execute 'EXPLAIN' command for all queries
+   */
   public async updateExplainResult(explainResultCallback) {
     const dbConnection = new DBConnection();
     const connection = dbConnection.createToolConnection();
@@ -124,9 +132,7 @@ class ExplainQueriesDataStore extends QueriesDataStoreBase {
           connection.end();
           prodConnection.end();
 
-          return explainResultCallback(
-            {status: inserted},
-            inserted ? undefined : new Error('There was an error in analyze queries by EXPLAIN'));
+          return explainResultCallback(undefined);
         }
       })});
     } catch (error) {
@@ -134,9 +140,16 @@ class ExplainQueriesDataStore extends QueriesDataStoreBase {
       logger.logError(error.message);
       connection.end();
       prodConnection.end();
+      return explainResultCallback(new Error('There was an error in analyze queries by EXPLAIN'));
     }
   }
 
+  /**
+   *
+   * @param tables - a set of tables
+   *
+   * @summary Return prepared part of query string with tables_statistic, queries_to_tables relationships join
+   */
   protected tablesQueryBuild(tables): string {
     return super.tablesQueryBuild(tables);
   }
@@ -144,9 +157,11 @@ class ExplainQueriesDataStore extends QueriesDataStoreBase {
   /**
    *
    * @param tables - a set of tables for find matching queries
-   * @param callback - returns the retrieving rows by search tables and EXPLAIN statuses configuration
+   * @param explainStatusesCallback - returns the retrieving rows by search tables and EXPLAIN statuses configuration
+   *
+   * @summary Select 'EXPLAIN' result for all queries
    */
-  public async getExplainInfo(tables, callback) {
+  public async getExplainInfo(tables, explainStatusesCallback) {
     const connection = new DBConnection().createToolConnection();
 
     const statusesConfigurationDataStore = new StatusesConfigurationDataStore();
@@ -160,7 +175,7 @@ class ExplainQueriesDataStore extends QueriesDataStoreBase {
       },
     });
 
-    const tablesJoinPart =  this.tablesQueryBuild(tables);
+    const tablesJoinPart = this.tablesQueryBuild(tables);
 
     const withStatuses = `
       select 
@@ -230,11 +245,11 @@ class ExplainQueriesDataStore extends QueriesDataStoreBase {
 
     connection.query(query, (err: MysqlError, result: any) => {
       if (result) {
-        callback(result, undefined);
+        explainStatusesCallback(result, undefined);
       }
       if (err) {
         logger.logError(err);
-        callback(undefined, err);
+        explainStatusesCallback(undefined, err);
       }
     });
 

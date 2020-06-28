@@ -1,28 +1,24 @@
 import { Request, Response } from 'express';
 import ParametrizedQueriesDataStore from './ParametrizedQueriesDataStore';
 import ControllerBase from '../helpers/ControllerBase';
-import {checkTableInDatabase} from "../helpers/CheckTableInDatabase";
+import {checkTableInDatabase} from "../Initial/CheckTableInDatabase";
 
 export class ParametrizedQueriesController extends ControllerBase {
-  public getQueries(req: Request, res: Response) {
+  public async getQueries(req: Request, res: Response) {
     const parametrizedQueriesDataStore = new ParametrizedQueriesDataStore();
 
     const {byHost, limit, page = 1, tables} = this.parseRequest(req);
 
-    checkTableInDatabase.checkTable({
-      tableName: 'parametrized_queries',
-      callbackCheckTable: existCheckResult => {
-        if (!existCheckResult) {
-          res.status(200).send({
-            page: 0,
-            pageCount: 0,
-            queries: [],
-          });
+    const existCheckResult = await checkTableInDatabase.checkTable('parametrized_queries');
+    if (!existCheckResult) {
+      res.status(200).send({
+        page: 0,
+        pageCount: 0,
+        queries: [],
+      });
 
-          return;
-        }
-      },
-    });
+      return;
+    }
 
     parametrizedQueriesDataStore.getAll({byHost, tables: tables || [], callback: (data, err) => {
       if (err)

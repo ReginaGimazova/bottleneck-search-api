@@ -6,12 +6,14 @@ import { analyzeProgress } from '../AnalyzeProgress/AnalyzeProgress';
 import DBConnection from '../DatabaseAccess/DBConnection';
 import StatusesConfigurationDataStore from '../StatusesConfiguration/StatusesConfigurationDataStore';
 import FilteredQueryDataStore from "../FilteredQueries/FilteredQueryDataStore";
-import QueriesDataStoreBase from "../QueriesDataStoreBase";
+import QueriesDataStoreBase from "../helpers/QueriesDataStoreBase";
 
 class ProfileQueriesDataStore extends QueriesDataStoreBase {
   /**
    *
    * @param queries - filtered queries
+   *
+   * @summary Returns tuples (objects), containing query id, query text and profiler result
    */
   protected convertQueriesToTuple(queries) {
     return queries.map(({ id, query_text }) => {
@@ -25,7 +27,9 @@ class ProfileQueriesDataStore extends QueriesDataStoreBase {
 
   /**
    *
-   * @param tuples
+   * @param tuples - queries tuples with profile result
+   *
+   * @summary Returns ready to insert into database query string
    */
   private prepareInsertValues = tuples =>
     tuples
@@ -43,6 +47,8 @@ class ProfileQueriesDataStore extends QueriesDataStoreBase {
    * @param tuples - tuples, created in convertQueriesToTuple method (result = undefined)
    * @param connection - connection to tool database
    * @param prodConnection - connection to production database, which contains original info
+   *
+   * @summary Execute SHOW PROFILE command for all queries
    */
   private analyzeQueries({ tuples, callback, prodConnection }) {
     const promisifyQuery = promisify(prodConnection.query).bind(prodConnection);
@@ -68,11 +74,13 @@ class ProfileQueriesDataStore extends QueriesDataStoreBase {
 
   /**
    *
-   * @param connection
-   * @param prodConnection
+   * @param connection - tool database connection
+   * @param prodConnection - connection to production database with original data
    * @param isUpdate - if run only PROFILE update, not all file analyze, updateProgress shouldn't be called
-   * @param queries
-   * @param callback
+   * @param queries - filtered queries
+   * @param callback - function, that returns true if all profile result saved
+   *
+   * @summary Call functions to prepare queries, execute profiling queries and update progress value
    */
   public async save({ connection, prodConnection, isUpdate = false, queries, callback }) {
     const tuples = this.convertQueriesToTuple(queries);
@@ -115,8 +123,13 @@ class ProfileQueriesDataStore extends QueriesDataStoreBase {
     });
   }
 
+  /**
+   *
+   * @param profileResultCallback - function which returns boolean value, true - if all profile result saved
+   *
+   * @summary Execute SHOW PROFILE for all queries
+   */
   public updateProfileResult(profileResultCallback){
-    // TODO: create common class for Explain and Profile
     const dbConnection = new DBConnection();
     const connection = dbConnection.createToolConnection();
     const prodConnection = dbConnection.createProdConnection();
@@ -130,9 +143,7 @@ class ProfileQueriesDataStore extends QueriesDataStoreBase {
             connection.commit();
             connection.end();
             prodConnection.end();
-            return profileResultCallback(
-              {status: inserted},
-              inserted ? undefined : new Error('There was an error in analyze queries by PROFILE'));
+            return profileResultCallback(undefined);
           }
           })});
       })
@@ -141,9 +152,16 @@ class ProfileQueriesDataStore extends QueriesDataStoreBase {
         logger.logError(error.message);
         connection.end();
         prodConnection.end();
+        return profileResultCallback(new Error('There was an error in analyze queries by PROFILE'));
       })
   }
 
+  /**
+   *
+   * @param tables - a set of tables
+   *
+   * @summary Return prepared part of query string with tables_statistic, queries_to_tables relationships join
+   */
   protected tablesQueryBuild(tables): string {
     return super.tablesQueryBuild(tables);
   }
@@ -152,6 +170,8 @@ class ProfileQueriesDataStore extends QueriesDataStoreBase {
    *
    * @param tables - a set of tables for find matching queries
    * @param callback - returns the retrieving rows by search tables and PROFILE statuses configuration
+   *
+   * @summary Returns queries with profiling result
    */
   public async getProfileInfo(tables, callback) {
     const connection = new DBConnection().createToolConnection();

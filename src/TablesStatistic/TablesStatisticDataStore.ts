@@ -11,10 +11,10 @@ import { analyzeProgress } from '../AnalyzeProgress/AnalyzeProgress';
 class TablesStatisticDataStore {
   /**
    *
-   * @param queriesArray
+   * @param filteredQueriesArray
    */
-  private createQueriesTuple(queriesArray) {
-    return queriesArray.map(item => {
+  private createQueriesTuple(filteredQueriesArray) {
+    return filteredQueriesArray.map(item => {
       return {
         query_id: item.id,
         table_ids: new Set(),
@@ -25,14 +25,14 @@ class TablesStatisticDataStore {
 
   /**
    *
-   * @param tuples
+   * @param filteredQueriesTuples
    *
-   * This function takes tuple as argument and returns ready for insert query string
-   * table_ids, query_id - tuple fields
+   * @summary This function takes filtered queries tuples as argument and returns ready for insert query string
+   * @inner table_ids, query_id - tuple fields
    */
 
-  private convertTupleToQueryString(tuples) {
-    return tuples.map(({table_ids, query_id}) =>
+  private convertTupleToQueryString(filteredQueriesTuples) {
+    return filteredQueriesTuples.map(({table_ids, query_id}) =>
       [...table_ids]
         .map(tableId => `('${query_id}', '${tableId}')`)
         .join(', ')
@@ -41,8 +41,10 @@ class TablesStatisticDataStore {
 
   /**
    *
-   * @param query_text
-   * @param connection
+   * @param query_text - filtered query text
+   * @param connection - tool connection
+   *
+   * @summary Returns all table names from query
    */
   private parseTablesFromQuery({ query_text, connection }) {
     const { error: parserError = '', tables = [] } = parseTablesUsedInQueries(
@@ -63,15 +65,17 @@ class TablesStatisticDataStore {
 
   /**
    *
-   * @param connection
-   * @param tuples
+   * @param connection - tool connection
+   * @param filteredQueriesTuples - filtered queries tuples, created in createQueriesTuple function
+   *
+   * @summary This function save query to tables (many to many) relation
    */
   private async saveQueryToTablesRelation({
     connection,
-    tuples,
+    filteredQueriesTuples,
   }) {
     const promisifyQuery = promisify(connection.query).bind(connection);
-    const insertQuery = this.convertTupleToQueryString(tuples).join(', ');
+    const insertQuery = this.convertTupleToQueryString(filteredQueriesTuples).join(', ');
 
     try {
       connection.query('SET FOREIGN_KEY_CHECKS = 0;');
@@ -91,17 +95,20 @@ class TablesStatisticDataStore {
 
   /**
    *
-   * @param table
-   * @param connection
+   * @param connection - tool connection
+   * @param filteredQueryTuple - object, containing tables, table_ids, query_id fields
+   * @param isThroughFinalQuery - boolean value, if this value = true, progress should been updated
+   *
+   * @summary Save all tables for ONE query
    */
   private insertTablesSeparately = async ({
-    tuple,
+    filteredQueryTuple,
     connection,
     isThroughFinalQuery,
   }) => {
     const promisifyQuery = promisify(connection.query).bind(connection);
 
-    const { tables, table_ids } = tuple;
+    const { tables, table_ids } = filteredQueryTuple;
     const tableNames = Object.keys(tables);
 
     if (isThroughFinalQuery && !Object.entries(tables).length) {
@@ -124,7 +131,7 @@ class TablesStatisticDataStore {
         table_ids.add(insertId);
 
         if (index === tableNames.length - 1) {
-          return tuple;
+          return filteredQueryTuple;
         }
       } catch (insertTableError) {
         await analyzeProgress.resetCounter();
@@ -136,38 +143,38 @@ class TablesStatisticDataStore {
 
   /**
    *
-   * @param connection
-   * @param queries
-   * @param callback
+   * @param connection - tool connection
+   * @param queries - filtered queries array
+   * @param callback - function from FilteredQueriesDataStore
    */
   save({ connection, queries, callback }) {
-    let tuples = this.createQueriesTuple(queries);
+    let filteredQueriesTuples = this.createQueriesTuple(queries);
 
     queries.forEach((query, index) => {
       const { query_text } = query;
       const usedTables = this.parseTablesFromQuery({query_text, connection})
 
       if (usedTables.length === 0){
-        tuples[index] = undefined
+        filteredQueriesTuples[index] = undefined
       }
       else {
-        tuples[index].tables = countBy(usedTables);
+        filteredQueriesTuples[index].tables = countBy(usedTables);
       }
     });
 
-    tuples = without(tuples, undefined);
+    filteredQueriesTuples = without(filteredQueriesTuples, undefined);
 
-    tuples.forEach(async (tuple, index) => {
-      const isThroughFinalQuery = index === tuples.length - 1;
+    filteredQueriesTuples.forEach(async (filteredQueryTuple, index) => {
+      const isThroughFinalQuery = index === filteredQueriesTuples.length - 1;
 
-      tuples[index] = await this.insertTablesSeparately({
-        tuple,
+      filteredQueriesTuples[index] = await this.insertTablesSeparately({
+        filteredQueryTuple,
         connection,
         isThroughFinalQuery,
       });
 
       if (isThroughFinalQuery){
-        await this.saveQueryToTablesRelation({connection, tuples});
+        await this.saveQueryToTablesRelation({connection, filteredQueriesTuples});
         logger.logInfo('Tables saved')
         await analyzeProgress.updateProgress();
         return callback(true)
@@ -177,7 +184,9 @@ class TablesStatisticDataStore {
 
   /**
    *
-   * @param callback
+   * @param callback - function returns data and error to controller
+   *
+   * @summary Get all tables
    */
   getAll(callback) {
     const dbConnection = new DBConnection();

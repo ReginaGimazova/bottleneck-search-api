@@ -8,6 +8,13 @@ import {logger} from "../helpers/Logger";
 class AnalyzeProgress {
   private analyzeStepsCount = 8;
 
+  /**
+   * @summary Update progress after some analyze step completion
+   *
+   * 1. Get current progress
+   * 2. Default progress step = 100 percent / 8 (8 - analyze step count)
+   * 3. Updated progress = current progress + progress step
+   */
   public async updateProgress(){
     const connection = new DBConnection().createToolConnection();
     const promisifyQuery = promisify(connection.query).bind(connection);
@@ -35,6 +42,11 @@ class AnalyzeProgress {
     }
   }
 
+  /**
+   *
+   * @param connection - connection to tool database
+   * @summary Get current progress from database, create connection if doesn't provide
+   */
   public async getCurrentProgress(connection){
     let toolConnection = connection;
     let result;
@@ -62,6 +74,9 @@ class AnalyzeProgress {
     return result;
   }
 
+  /**
+   * @summary Reset progress counter (reset after some error and after the analysis cycle)
+   */
   public async resetCounter(){
     const connection = new DBConnection().createToolConnection();
     const promisifyQuery = promisify(connection.query).bind(connection);

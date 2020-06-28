@@ -1,4 +1,4 @@
-import {checkTableInDatabase} from "../helpers/CheckTableInDatabase";
+import {checkTableInDatabase} from "../Initial/CheckTableInDatabase";
 import FilteredQueryDataStore from "./FilteredQueryDataStore";
 
 export class FilteredQueryController {
@@ -7,15 +7,12 @@ export class FilteredQueryController {
     const statusId = +req.query.statusId;
     const type = req.query.type;
 
-    checkTableInDatabase.checkTable({
-      tableName: 'filtered_queries',
-      callbackCheckTable: existCheckResult => {
-        if (!existCheckResult) {
-          res.status(200).send([]);
-          return;
-        }
-      },
-    });
+    const existCheckResult = await checkTableInDatabase.checkTable('filtered_queries');
+
+    if (!existCheckResult) {
+      res.status(200).send([]);
+      return;
+    }
 
     await filteredQueryDataStore.getByStatusId({statusId, type, getQueryCallback: (data, err) => {
       if (err)

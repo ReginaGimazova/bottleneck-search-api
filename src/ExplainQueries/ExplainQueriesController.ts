@@ -1,6 +1,6 @@
 import ExplainQueriesDataStore from './ExplainQueriesDataStore';
 import ControllerBase from '../helpers/ControllerBase';
-import { checkTableInDatabase } from '../helpers/CheckTableInDatabase';
+import { checkTableInDatabase } from '../Initial/CheckTableInDatabase';
 import databasePrepare from '../Initial/DatabasePrepare';
 
 export class ExplainQueriesController extends ControllerBase {
@@ -31,7 +31,7 @@ export class ExplainQueriesController extends ControllerBase {
     const explainQueriesDataStore = new ExplainQueriesDataStore();
     await databasePrepare.truncateCurrentTable('explain_replay_info');
 
-    await explainQueriesDataStore.updateExplainResult(async (data, error) => {
+    await explainQueriesDataStore.updateExplainResult(async (error) => {
       if (error)
         res.status(500).send({
           message:
@@ -45,20 +45,17 @@ export class ExplainQueriesController extends ControllerBase {
   }
 
   public getAll = async (req, res) => {
-    checkTableInDatabase.checkTable({
-      tableName: 'explain_replay_info',
-      callbackCheckTable: existCheckResult => {
-        if (!existCheckResult) {
-          res.status(200).send({
-            page: 0,
-            pageCount: 0,
-            queries: [],
-          });
+    const existCheckResult = await checkTableInDatabase.checkTable('explain_replay_info');
 
-          return;
-        }
-      },
-    });
+    if (!existCheckResult) {
+      res.status(200).send({
+        page: 0,
+        pageCount: 0,
+        queries: [],
+      });
+
+      return;
+    }
 
     await this.getExplainInfoIfSuccess(req, res)
   };

@@ -1,6 +1,5 @@
 import SimpleLogger from 'simple-node-logger';
 
-// change to Singleton
 class Logger {
   public settings;
 

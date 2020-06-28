@@ -17,9 +17,9 @@ class FilteredQueryDataStore {
 
   /**
    *
-   * @param queriesArray
+   * @param queriesArray - filtered queries array
    *
-   * Convert an array of queries (queriesArray) into tuples
+   * @summary Convert an array of queries (queriesArray) into tuples
    */
   private createQueriesTuple(queriesArray) {
     return queriesArray.map(item => {
@@ -27,16 +27,13 @@ class FilteredQueryDataStore {
         user_host: item.user_host,
         argument: item.argument,
         parametrized_query_id: undefined,
-        parsed_query_hash: ''
       };
     });
   }
 
   /**
-   *
-   * This function takes tuples (which created in 'createQueriesTuple' method) as argument
-   * and returns ready for insert query string
-   * tuple fields: user_host - from original log, argument - field from original log, parametrized_query_id
+   * @param tuples, fields: user_host - from original log, argument - field from original log, parametrized_query_id
+   * @summary Returns ready for insert query string
    */
   private convertTupleToQueryString = tuples =>
     tuples
@@ -49,7 +46,7 @@ class FilteredQueryDataStore {
   /**
    *
    * @param promisifyQuery - promisified query for connection to tool database
-   * This method supports 2 filtering modes (S - static, R - pattern) for filter original queries
+   * @summary This method supports 2 filtering modes (S - static, R - pattern) for filter original queries
    */
   private retrieveOriginalQueriesByFilter(promisifyQuery) {
     return promisifyQuery(
@@ -65,6 +62,13 @@ class FilteredQueryDataStore {
     );
   }
 
+  /**
+   *
+   * @param connection - tool connection
+   * @param values - prepared values from convertTupleToQueryString method
+   *
+   * @summary This function insert filtered queries with parametrized_query_id relation to filtered_queries
+   */
   private async insertFilteredQueries({ connection, values }) {
     const promisifyQuery = promisify(connection.query).bind(connection);
 
@@ -92,12 +96,21 @@ class FilteredQueryDataStore {
    *
    * @param connection - connection to tool database
    *
+   * @summary Get all filtered queires
    */
   public getAllFilteredQueries(connection) {
     const promisifyQuery = promisify(connection.query).bind(connection);
     return promisifyQuery('select id, query_text from master.filtered_queries');
   }
 
+  /**
+   *
+   * @param statusId - status ID
+   * @param type - EXPLAIN or PROFILE
+   * @param getQueryCallback - callback returns select queries result
+   *
+   * @summary Returns ONE filtered query by status id
+   */
   public async getByStatusId({statusId, type, getQueryCallback}){
     const connection = new DBConnection().createToolConnection();
     const promisifyQuery = promisify(connection.query).bind(connection);
@@ -129,10 +142,9 @@ class FilteredQueryDataStore {
    * @param connection - connection to tool database
    * @param filteredQueries
    *
-   * This method checks finishing of the analysis to commit the transaction and close connections
+   * @summary This method checks finishing of the analysis to commit the transaction and close connections
    *
-   * tablesStatisticDataStore.save(), explainQueriesDataStore.save() and profileQueriesDataStore.save() -
-   * async functions which work asynchronously, since they are independent of each other
+   * @inner tablesStatisticDataStore.save(), explainQueriesDataStore.save() and profileQueriesDataStore.save() - async functions which work asynchronously, since they are independent of each other
    */
 
   private async nextAnalyzeProcess({ connection, filteredQueries }) {
@@ -190,7 +202,7 @@ class FilteredQueryDataStore {
    *
    * @param connection - connection to tool database
    *
-   * Insert filtered queries and next steps for analysis
+   * @summary Insert filtered queries and call next steps for analysis
    */
 
   async save(connection) {
@@ -216,7 +228,7 @@ class FilteredQueryDataStore {
       const values = this.convertTupleToQueryString(updatedTuples);
       await this.insertFilteredQueries({connection, values});
 
-      userHostDataStore.saveUserHosts({connection, tuples: updatedTuples});
+      userHostDataStore.saveUserHosts({connection, queriesTuples: updatedTuples});
 
       try {
         const filteredQueries = await this.getAllFilteredQueries(

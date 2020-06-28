@@ -4,9 +4,10 @@ import DBConnection from '../DatabaseAccess/DBConnection';
 import {logger} from '../helpers/Logger';
 import {analyzeProgress} from "../AnalyzeProgress/AnalyzeProgress";
 import {dirName} from '../SqlSources/dirName';
+import {checkTableInDatabase} from "./CheckTableInDatabase";
 
 /**
- * Used for truncate tables, which contain info from general log file
+ * @summary Used for truncate tables, which contain info from general log file
  */
 
 class DatabasePrepare {
@@ -43,7 +44,7 @@ class DatabasePrepare {
       source: `${dirName}/filtered_queries.sql`,
       exist: false,
     },
-    rejected_queries: {
+    rejected_original_queries: {
       source: `${dirName}/rejected_queries.sql`,
       exist: false,
     },
@@ -65,6 +66,9 @@ class DatabasePrepare {
     },
   };
 
+  /**
+   * @summary Check that table exist, if not - create this table
+   */
   createTables() {
     const dbConnection = new DBConnection();
     const connection = dbConnection.createToolConnection();
@@ -74,29 +78,37 @@ class DatabasePrepare {
       if (error) {
         logger.logError(error);
       } else {
-        Object.keys(this.tablesSources).forEach((tableName, index) => {
+        Object.keys(this.tablesSources).forEach(async (tableName, index) => {
           const script = fs
             .readFileSync(this.tablesSources[tableName].source)
             .toString();
-          promisifyQuery(script)
-            .then(async result => {
-              if (result) {
-                this.tablesSources[tableName].exist = true;
-              }
+
+          const tableAlreadyExist = await checkTableInDatabase.checkTable(tableName);
+
+          if (!tableAlreadyExist){
+            try {
+              await promisifyQuery(script);
+              this.tablesSources[tableName].exist = true;
+
               if (index === Object.keys(this.tablesSources).length - 1){
                 await analyzeProgress.updateProgress();
               }
-            })
-            .catch(err => {
+            } catch (err) {
               logger.logError(err);
               connection.rollback();
               connection.end();
-            });
+            }
+          }
         });
       }
     });
   }
 
+  /**
+   *
+   * @param tableName
+   * @summary Truncate table with this table name
+   */
   async truncateCurrentTable(tableName) {
     const dbConnection = new DBConnection();
     const connection = dbConnection.createToolConnection();
@@ -105,6 +117,12 @@ class DatabasePrepare {
     await promisifyQuery(`truncate master.${tableName};`)
   }
 
+  /**
+   *
+   * @param prepareDatabaseCallback - function returns true if all tables truncated
+   *
+   * @summary Truncate all tables from previous analyze cycle
+   */
   truncateTables(prepareDatabaseCallback) {
     const dbConnection = new DBConnection();
     const connection = dbConnection.createToolConnection();

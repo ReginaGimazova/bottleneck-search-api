@@ -13,11 +13,11 @@ class StatusesConfigurationRoutes {
       configurationController.getAll(req, res)
     );
 
-    this.router.post('/', (req: express.Request, res: express.Response) =>
+    this.router.post('/update', (req: express.Request, res: express.Response) =>
       configurationController.update(req, res)
     );
 
-    this.router.post('/new', (req: express.Request, res: express.Response) =>
+    this.router.post('/add', (req: express.Request, res: express.Response) =>
       configurationController.addStatus(req, res)
     );
 

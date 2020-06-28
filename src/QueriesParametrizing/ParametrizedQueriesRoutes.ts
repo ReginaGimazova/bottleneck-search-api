@@ -9,8 +9,8 @@ class ParametrizedQueriesRoutes {
   }
 
   private config(): void {
-    this.router.get('/', (req: express.Request, res: express.Response) => {
-      parametrizedQueriesController.getQueries(req, res)
+    this.router.get('/', async (req: express.Request, res: express.Response) => {
+      await parametrizedQueriesController.getQueries(req, res)
     });
   }
 }

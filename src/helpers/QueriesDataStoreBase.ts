@@ -2,6 +2,8 @@ class QueriesDataStoreBase {
   /**
    *
    * @param tables - a set of tables according to which queries should been fetched
+   *
+   * @summary Returns a part of query to use tables_statistic relation
    */
 
   protected tablesQueryBuild(tables){

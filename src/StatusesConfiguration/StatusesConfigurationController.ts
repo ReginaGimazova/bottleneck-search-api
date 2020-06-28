@@ -1,21 +1,17 @@
 import { Request, Response } from 'express';
 import StatusesConfigurationDataStore from "./StatusesConfigurationDataStore";
-import {checkTableInDatabase} from "../helpers/CheckTableInDatabase";
+import {checkTableInDatabase} from "../Initial/CheckTableInDatabase";
 
 export class StatusesConfigurationController {
-  public getAll(req: Request, res: Response) {
+  public async getAll(req: Request, res: Response) {
     const configurationDataStore = new StatusesConfigurationDataStore();
 
-    checkTableInDatabase.checkTable({
-      tableName: 'statuses_configuration',
-      callbackCheckTable: existCheckResult => {
-        if (!existCheckResult) {
-          res.status(200).send([]);
-          return;
-        }
+    const existCheckResult = await checkTableInDatabase.checkTable('statuses_configuration');
 
-      },
-    });
+    if (!existCheckResult) {
+      res.status(200).send([]);
+      return;
+    }
 
     configurationDataStore.getAll((data, err) => {
       if (err)
@@ -49,13 +45,13 @@ export class StatusesConfigurationController {
     const configurationDataStore = new StatusesConfigurationDataStore();
     const {value, mode, type} = req.body;
 
-    configurationDataStore.addStatus({value, mode, type}, (data, err) => {
+    configurationDataStore.addStatus({value, mode, type}, async (data, err) => {
       if (err){
         res.status(500).send({
           message: err.message || 'Add status error'
         })
       } else {
-        this.getAll(req, res);
+        await this.getAll(req, res);
       }
     })
   }
@@ -64,13 +60,13 @@ export class StatusesConfigurationController {
     const configurationDataStore = new StatusesConfigurationDataStore();
     const {value, type} = req.body;
 
-    configurationDataStore.removeStatus({value, type}, (data, err) => {
+    configurationDataStore.removeStatus({value, type}, async (data, err) => {
       if (err){
         res.status(500).send({
           message: err.message || 'Remove status error'
         })
       } else {
-        this.getAll(req, res);
+        await this.getAll(req, res);
       }
     })
   }

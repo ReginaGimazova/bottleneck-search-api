@@ -9,6 +9,8 @@ class StatusesConfigurationDataStore {
    *
    * @param statuses - all statuses from FE, which containt statuses with updated modes
    * @param callback - return updated statuses
+   *
+   * @summary Update statuses configuration
    */
   update(statuses = [], callback) {
     const connection = new DBConnection().createToolConnection();
@@ -24,7 +26,8 @@ class StatusesConfigurationDataStore {
             `
               update master.statuses_configuration
               set mode = "${status.mode}"
-              where value = "${status.value}"
+              where value = "${status.value}" and
+              type = "${status.type}"
             `
           )
             .then(() => {
@@ -49,6 +52,8 @@ class StatusesConfigurationDataStore {
    *
    * @param newStatusData - new configuration status which contains value, type: Explain or Profile and mode
    * @param callback - return error or success insert message
+   *
+   * @summary Add configuration status
    */
   addStatus(newStatusData, callback) {
     const connection = new DBConnection().createToolConnection();
@@ -77,6 +82,8 @@ class StatusesConfigurationDataStore {
    *
    * @param statusValue - value of status which must be removed
    * @param callback - return error or success removing message
+   *
+   * @summary Remove status
    */
   removeStatus(statusValue, callback) {
     const connection = new DBConnection().createToolConnection();
@@ -100,6 +107,8 @@ class StatusesConfigurationDataStore {
    * @param connection - tool connection
    * @param type - type of configuration status: Explain or Profile
    * @param callbackCountOfStatuses - callback which returns count of statuses for this type
+   *
+   * @summary Check that this status exist and should been applied
    */
   async checkStatusesConfigExist({
     connection,
@@ -120,6 +129,8 @@ class StatusesConfigurationDataStore {
   /**
    *
    * @param callback - return all status configurations
+   *
+   * @summary Returns all statuses configuration
    */
   getAll(callback) {
     const connection = new DBConnection().createToolConnection();

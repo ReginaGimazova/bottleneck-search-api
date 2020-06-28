@@ -3,16 +3,25 @@ import { logger } from '../helpers/Logger';
 import { analyzeProgress } from '../AnalyzeProgress/AnalyzeProgress';
 
 class UserHostDataStore {
+
+  /**
+   *
+   * @param connection - tool database connection
+   * @param queriesTuples - queries tuples, that contain the following data: user_host, argument, parametrized_query_id
+   * @param selectHostResult - result from select query
+   *
+   * @summary This function save user_host-parametrized_queries relation to queries_to_user_host table
+   */
   private async saveUserHostQueryRelation({
     connection,
-    tuples,
+    queriesTuples,
     selectHostResult,
   }) {
     const promisifyQuery = promisify(connection.query).bind(connection);
 
     const hostQueryRelation = [];
 
-    tuples.forEach(({ user_host, parametrized_query_id }) => {
+    queriesTuples.forEach(({ user_host, parametrized_query_id }) => {
       selectHostResult.forEach(({ id, user_host: savedUserHost }) => {
         if (user_host === savedUserHost) {
           hostQueryRelation.push({
@@ -46,7 +55,14 @@ class UserHostDataStore {
     }
   }
 
-  private async getUserHosts({ connection, tuples }) {
+  /**
+   *
+   * @param connection - tool database connection
+   * @param queriesTuples - queries tuples, that contain the following data: user_host, argument, parametrized_query_id
+   *
+   * @summary This function select all user hosts and provide them to saveUserHostQueryRelation function
+   */
+  private async getUserHosts({ connection, queriesTuples }) {
     const promisifyQuery = promisify(connection.query).bind(connection);
 
     const selectUserHostString = `
@@ -57,7 +73,7 @@ class UserHostDataStore {
       const result = await promisifyQuery(selectUserHostString);
       await this.saveUserHostQueryRelation({
         connection,
-        tuples,
+        queriesTuples,
         selectHostResult: result,
       });
     } catch (error) {
@@ -69,13 +85,15 @@ class UserHostDataStore {
 
   /**
    *
-   * @param connection
-   * @param tuples
+   * @param connection - tool connection
+   * @param queriesTuples - queries tuples, that contain the following data: user_host, argument, parametrized_query_id
+   *
+   * @summary Save unique user hosts to user_host table
    */
-  public saveUserHosts({ connection, tuples }) {
+  public saveUserHosts({ connection, queriesTuples }) {
     const promisifyQuery = promisify(connection.query).bind(connection);
 
-    const uniqHosts = [...new Set(tuples.map(({ user_host }) => user_host))];
+    const uniqHosts = [...new Set(queriesTuples.map(({ user_host }) => user_host))];
 
     uniqHosts.forEach(async (userHost, index) => {
       const insertHostString = `
@@ -86,7 +104,7 @@ class UserHostDataStore {
       try {
         await promisifyQuery(insertHostString);
         if (index === uniqHosts.length - 1) {
-          await this.getUserHosts({ connection, tuples });
+          await this.getUserHosts({ connection, queriesTuples });
         }
       } catch (e) {
         await analyzeProgress.resetCounter();
