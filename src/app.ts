@@ -35,7 +35,12 @@ class App {
       })
     );
     this.app.use(helmet());
-    this.app.use(cors());
+    this.app.use(cors({
+      exposedHeaders: ['Content-Length', 'X-Foo', 'X-Bar'],
+      credentials: true,
+      origin: 'http://log-analyzer-client.herokuapp.com/critical-statuses',
+      optionsSuccessStatus: 200
+    }));
 
     this.app.use('/start', initialRoutes);
     this.app.use('/progress', analyzeProgressRoute);
