@@ -38,7 +38,7 @@ class App {
     this.app.use(cors({
       exposedHeaders: ['Content-Length', 'X-Foo', 'X-Bar'],
       credentials: true,
-      origin: 'http://log-analyzer-client.herokuapp.com/critical-statuses',
+      origin: 'http://query-log-analyzer.herokuapp.com',
       optionsSuccessStatus: 200
     }));
 
