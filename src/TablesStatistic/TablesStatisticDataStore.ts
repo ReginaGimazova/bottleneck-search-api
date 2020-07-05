@@ -198,10 +198,10 @@ class TablesStatisticDataStore {
         if (error) {
           logger.logError(error);
           callback(undefined, error);
-          connection.end();
         } else if (result) {
           callback(result, undefined);
         }
+        connection.end();
       }
     );
   }

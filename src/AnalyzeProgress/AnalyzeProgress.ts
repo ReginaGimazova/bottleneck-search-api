@@ -86,6 +86,8 @@ class AnalyzeProgress {
     `;
 
     await promisifyQuery(queryString);
+
+    connection.end();
   }
 }
 
