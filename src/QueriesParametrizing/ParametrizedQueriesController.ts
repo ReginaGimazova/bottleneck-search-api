@@ -30,10 +30,12 @@ export class ParametrizedQueriesController extends ControllerBase {
       else {
         const pageCount = Math.ceil(data.length / 10);
 
+        const correctPage = page > pageCount ? pageCount : page;
+
         res.status(200).send({
           page: page > pageCount ? pageCount : page,
           pageCount,
-          queries: data.slice(page * limit - limit, page * limit)
+          queries: data.slice(correctPage * limit - limit, correctPage * limit)
         });
       }
     }});
