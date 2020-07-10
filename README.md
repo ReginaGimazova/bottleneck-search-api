@@ -10,7 +10,7 @@ Steps to run this project:
 
 Create .env file with followed data
 
-PORT=5000
+PORT=8080
 
 DB_HOST=AWS endpoint for RDS, which used by this api
 
