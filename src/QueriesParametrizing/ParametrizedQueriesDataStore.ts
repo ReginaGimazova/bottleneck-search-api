@@ -193,7 +193,9 @@ class ParametrizedQueriesDataStore extends QueriesDataStoreBase {
     connection.query(queryString, async (err: MysqlError, result: any) => {
       if (result) {
         callback(result, undefined);
-        await analyzeProgress.resetCounter();
+        if (result.length){
+          await analyzeProgress.resetCounter();
+        }
       }
       if (err) {
         logger.logError(err);
