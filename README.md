@@ -6,11 +6,12 @@ Steps to run this project:
 
 `npm start` - run server
 
+
 ### Setup environment for server
 
 Create .env file with followed data
 
-PORT=5000
+PORT=8080
 
 DB_HOST=AWS endpoint for RDS, which used by this api
 
@@ -29,3 +30,15 @@ PROD_DB_USER=user name for production access
 PROD_DB_PASSWORD=password for production access
     
 PROD_DATABASE=production database name
+
+
+
+### WIKI: 
+
+[Settings](https://github.com/ReginaGimazova/log_analyzer_api/wiki/Settings)
+
+[Run Api](https://github.com/ReginaGimazova/log_analyzer_api/wiki/Run-API)
+
+[API description](https://github.com/ReginaGimazova/log_analyzer_api/wiki/API)
+
+[Logs](https://github.com/ReginaGimazova/log_analyzer_api/wiki/Logs)
